@@ -1,0 +1,16 @@
+a & b & C -> c | R1
+a & b & ma -> c | R2
+a & b & mb -> c | R3
+A & B -> C | R4
+a & hc -> B | R5
+b & hc -> A | R6
+a & R -> A | R7
+b & R -> B | R8
+a & b & c -> P | R9
+a & b & c -> p | R10
+a & b & c -> mc | R11
+a & ha -> S | R12
+a & b & C -> S | R13
+a & b & c & p -> S | R14
+b & S -> hb | R15
+S & p -> r | R16
