@@ -14,3 +14,4 @@ a & b & C -> S | R13
 a & b & c & p -> S | R14
 b & S -> hb | R15
 S & p -> r | R16
+a & b -> c
