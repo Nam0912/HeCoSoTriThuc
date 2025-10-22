@@ -11,13 +11,15 @@ import itertools
 from collections import deque
 import textwrap
 
+
 # ---------- Core Engine: Data Structures ----------
 @dataclass(frozen=True)
 class Rule:
     premises: Tuple[str, ...]
     conclusion: str
     label: str
-    id: int # Thêm ID để theo dõi chỉ số
+    id: int  # Thêm ID để theo dõi chỉ số
+
 
 def load_and_parse_rules(filepath: str) -> List[Rule]:
     """
@@ -38,10 +40,10 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
                 if "->" not in raw:
                     print(f"Bỏ qua dòng {line_num}: Thiếu '->'. Nội dung: '{raw}'")
                     continue
-                
+
                 left, right = raw.split("->", 1)
                 left = left.replace("^", "&")
-                premises = tuple(sorted([p.strip() for p in left.split("&") if p.strip()])) # Sắp xếp tiền đề
+                premises = tuple(sorted([p.strip() for p in left.split("&") if p.strip()]))  # Sắp xếp tiền đề
 
                 if not premises:
                     print(f"Bỏ qua dòng {line_num}: Luật không có tiền đề. Nội dung: '{raw}'")
@@ -51,8 +53,8 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
                     concl, label = right.split("|", 1)
                 else:
                     # Gán nhãn mặc định nếu không có
-                    concl, label = right, f"R{len(rules)+1}"
-                
+                    concl, label = right, f"R{len(rules) + 1}"
+
                 conclusion = concl.strip()
                 label = label.strip()
 
@@ -62,7 +64,7 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
                 if canonical_key in seen_rules_canonical:
                     print(f"Bỏ qua dòng {line_num}: Luật trùng lặp. Nội dung: '{raw}'")
                     continue
-                
+
                 # Nếu luật hợp lệ và không trùng, thêm vào danh sách
                 seen_rules_canonical.add(canonical_key)
                 # Dùng premises chưa sắp xếp để giữ nguyên bản gốc (nếu muốn)
@@ -76,8 +78,10 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
     except Exception as e:
         messagebox.showerror("Lỗi đọc file", f"Đã xảy ra lỗi: {e}")
         return []
-        
+
     return rules
+
+
 # ---------- Core Engine: Forward Chaining Algorithms ----------
 
 # --- FORWARD CHAINING (BFS / Queue) ---
@@ -85,10 +89,10 @@ def forward_chain_bfs(rules: List[Rule], facts: Set[str], selection_mode: str):
     known = set(facts)
     prov: Dict[str, Tuple[Rule, Tuple[str, ...]]] = {}
     steps: List[str] = []
-    
+
     queue: Deque[str] = deque(list(facts))
     visited_facts_for_expansion = set()
-    
+
     rule_source = rules if selection_mode == 'Min' else list(reversed(rules))
 
     while queue:
@@ -103,21 +107,22 @@ def forward_chain_bfs(rules: List[Rule], facts: Set[str], selection_mode: str):
                     new_fact = r.conclusion
                     known.add(new_fact)
                     prov[new_fact] = (r, r.premises)
-                    steps.append(f"({len(steps)+1}) Kích hoạt '{r.label}': {{{', '.join(r.premises)}}} → {new_fact}")
+                    steps.append(f"({len(steps) + 1}) Kích hoạt '{r.label}': {{{', '.join(r.premises)}}} → {new_fact}")
                     if new_fact not in queue:
                         queue.append(new_fact)
     return known, prov, steps
+
 
 # --- FORWARD CHAINING (DFS / Stack) ---
 def forward_chain_dfs(rules: List[Rule], facts: Set[str], selection_mode: str):
     known = set(facts)
     prov: Dict[str, Tuple[Rule, Tuple[str, ...]]] = {}
     steps: List[str] = []
-    
+
     rule_source = rules if selection_mode == 'Min' else list(reversed(rules))
-    
+
     initial_facts = list(facts)
-    
+
     def _dfs_visit(fact_to_process: str):
         for r in rule_source:
             if r.conclusion not in known and fact_to_process in r.premises:
@@ -125,16 +130,18 @@ def forward_chain_dfs(rules: List[Rule], facts: Set[str], selection_mode: str):
                     new_fact = r.conclusion
                     known.add(new_fact)
                     prov[new_fact] = (r, r.premises)
-                    steps.append(f"({len(steps)+1}) Kích hoạt '{r.label}': {{{', '.join(r.premises)}}} → {new_fact}")
+                    steps.append(f"({len(steps) + 1}) Kích hoạt '{r.label}': {{{', '.join(r.premises)}}} → {new_fact}")
                     _dfs_visit(new_fact)
 
     for fact in initial_facts:
         _dfs_visit(fact)
-        
+
     return known, prov, steps
 
+
 # ---------- Core Engine: Backward Chaining Algorithm ----------
-def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[str], selection_mode: str) -> List[List[Rule]]:
+def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[str], selection_mode: str) -> List[
+    List[Rule]]:
     if goal in facts:
         return [[]]
     if goal in seen:
@@ -142,7 +149,7 @@ def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[
     seen.add(goal)
 
     paths = []
-    
+
     rule_source = rules if selection_mode == 'Min' else list(reversed(rules))
     relevant_rules = [r for r in rule_source if r.conclusion == goal]
 
@@ -161,13 +168,14 @@ def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[
                 paths.append(chain)
     return paths
 
+
 # ---------- Graph Drawing ----------
 # --- FPG (Flow Process Graph) ---
 def draw_fpg(prov: Dict[str, Tuple[Rule, Tuple[str, ...]]], facts: Set[str]):
     if not prov and not facts:
         messagebox.showwarning("Lỗi", "Không có dữ liệu để vẽ đồ thị.")
         return
-        
+
     G = nx.DiGraph()
     all_nodes = set(facts)
     for concl, (_, premises) in prov.items():
@@ -176,13 +184,13 @@ def draw_fpg(prov: Dict[str, Tuple[Rule, Tuple[str, ...]]], facts: Set[str]):
             all_nodes.add(p)
 
     for node in all_nodes:
-        color = "#9ecae1" if node in prov else "#f7f7f7" # Kết luận màu xanh, GT màu xám
+        color = "#9ecae1" if node in prov else "#f7f7f7"  # Kết luận màu xanh, GT màu xám
         G.add_node(node, color=color)
 
     for concl, (r, used) in prov.items():
         for p in used:
             G.add_edge(p, concl, label=r.label)
-    
+
     plt.figure(figsize=(10, 8))
     colors = [G.nodes[n].get("color", "#ffffff") for n in G.nodes]
     pos = nx.spring_layout(G, seed=42, k=0.9)
@@ -195,6 +203,7 @@ def draw_fpg(prov: Dict[str, Tuple[Rule, Tuple[str, ...]]], facts: Set[str]):
     plt.axis("off")
     plt.tight_layout()
     plt.show()
+
 
 # --- RPG (Rule Process Graph) ---
 def draw_rpg(rules: List[Rule]):
@@ -222,9 +231,10 @@ def draw_rpg(rules: List[Rule]):
     plt.tight_layout()
     plt.show()
 
-# ĐẶT LỚP NÀY BÊN NGOÀI (PHÍA TRÊN) LỚP APP
+
 class RuleEditor(tk.Toplevel):
-    """Cửa sổ dialog để thêm hoặc sửa một luật."""
+    """Cửa sổ dialog để thêm hoặc sửa một luật, hỗ trợ nhiều giả thiết và kết luận."""
+
     def __init__(self, parent, title, rule=None):
         super().__init__(parent)
         self.transient(parent)
@@ -232,50 +242,103 @@ class RuleEditor(tk.Toplevel):
         self.parent = parent
         self.result = None
 
-        # Dữ liệu
-        self.premises_var = tk.StringVar()
-        self.conclusion_var = tk.StringVar()
-        self.label_var = tk.StringVar()
+        self.premise_entries = []   # danh sách ô nhập giả thiết
+        self.premise_ops = []       # danh sách menu chọn quan hệ (AND/OR)
+        self.conclusion_entries = []  # danh sách ô nhập kết luận
+        self.conclusion_ops = []
 
-        if rule: # Nếu là chế độ sửa, điền dữ liệu cũ
-            self.premises_var.set(" & ".join(rule.premises))
-            self.conclusion_var.set(rule.conclusion)
-            self.label_var.set(rule.label)
-
-        # Giao diện
+        # Frame tổng
         body = ttk.Frame(self, padding=10)
         body.pack(fill="both", expand=True)
 
-        ttk.Label(body, text="Tiền đề (cách nhau bởi &):").grid(row=0, column=0, sticky="w", pady=2)
-        ttk.Entry(body, textvariable=self.premises_var, width=50).grid(row=0, column=1, sticky="ew")
-        
-        ttk.Label(body, text="Kết luận:").grid(row=1, column=0, sticky="w", pady=2)
-        ttk.Entry(body, textvariable=self.conclusion_var, width=50).grid(row=1, column=1, sticky="ew")
+        # --- Giả thiết ---
+        ttk.Label(body, text="Giả thiết (Tiền đề):", font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w")
+        self.premise_frame = ttk.Frame(body)
+        self.premise_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 10))
+        self.premise_frame.columnconfigure(0, weight=1)
+        ttk.Button(body, text="+ Thêm Giả thiết", command=self.add_premise_field).grid(row=2, column=0, sticky="w")
 
-        ttk.Label(body, text="Nhãn:").grid(row=2, column=0, sticky="w", pady=2)
-        ttk.Entry(body, textvariable=self.label_var, width=50).grid(row=2, column=1, sticky="ew")
+        # --- Kết luận ---
+        ttk.Label(body, text="Kết luận:", font=("Segoe UI", 10, "bold")).grid(row=3, column=0, sticky="w", pady=(10, 0))
+        self.conclusion_frame = ttk.Frame(body)
+        self.conclusion_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(5, 10))
+        self.conclusion_frame.columnconfigure(0, weight=1)
+        ttk.Button(body, text="+ Thêm Kết luận", command=self.add_conclusion_field).grid(row=5, column=0, sticky="w")
 
-        body.columnconfigure(1, weight=1)
+        # --- Nhãn luật ---
+        ttk.Label(body, text="Nhãn Luật:").grid(row=6, column=0, sticky="w", pady=(10, 0))
+        self.label_var = tk.StringVar()
+        ttk.Entry(body, textvariable=self.label_var, width=40).grid(row=6, column=1, sticky="ew")
 
-        button_frame = ttk.Frame(self, padding=(0, 0, 0, 10))
-        button_frame.pack(fill="x")
+        # --- Nút Lưu/Hủy ---
+        button_frame = ttk.Frame(body, padding=(0, 10))
+        button_frame.grid(row=7, column=0, columnspan=2, sticky="e")
         ttk.Button(button_frame, text="Lưu", command=self.on_ok).pack(side="right", padx=5)
         ttk.Button(button_frame, text="Hủy", command=self.destroy).pack(side="right")
 
-        self.grab_set() # Giữ focus
-        self.wait_window(self) # Chờ cho đến khi cửa sổ này bị hủy
+        # Nếu là sửa, load dữ liệu cũ
+        if rule:
+            for p in rule.premises:
+                self.add_premise_field(p)
+            self.add_conclusion_field(rule.conclusion)
+            self.label_var.set(rule.label)
+        else:
+            self.add_premise_field()
+            self.add_conclusion_field()
 
-    def on_ok(self, event=None):
-        premises = tuple(p.strip() for p in self.premises_var.get().split('&') if p.strip())
-        conclusion = self.conclusion_var.get().strip()
-        label = self.label_var.get().strip()
+        self.grab_set()
+        self.wait_window(self)
 
-        if not premises or not conclusion:
-            messagebox.showerror("Lỗi", "Tiền đề và Kết luận không được rỗng.", parent=self)
+    def add_premise_field(self, value=""):
+        row = len(self.premise_entries)
+        if row > 0:
+            op_var = tk.StringVar(value="AND")
+            op_menu = ttk.Combobox(self.premise_frame, textvariable=op_var, values=["AND", "OR"], width=5)
+            op_menu.grid(row=row, column=0, padx=(0, 5), pady=2)
+            self.premise_ops.append(op_var)
+        entry = ttk.Entry(self.premise_frame, width=40)
+        entry.grid(row=row, column=1, sticky="ew", pady=2)
+        entry.insert(0, value)
+        self.premise_entries.append(entry)
+
+    def add_conclusion_field(self, value=""):
+        row = len(self.conclusion_entries)
+        if row > 0:
+            op_var = tk.StringVar(value="AND")
+            op_menu = ttk.Combobox(self.conclusion_frame, textvariable=op_var, values=["AND", "OR"], width=5)
+            op_menu.grid(row=row, column=0, padx=(0, 5), pady=2)
+            self.conclusion_ops.append(op_var)
+        entry = ttk.Entry(self.conclusion_frame, width=40)
+        entry.grid(row=row, column=1, sticky="ew", pady=2)
+        entry.insert(0, value)
+        self.conclusion_entries.append(entry)
+
+    def on_ok(self):
+        premises = [e.get().strip() for e in self.premise_entries if e.get().strip()]
+        conclusions = [e.get().strip() for e in self.conclusion_entries if e.get().strip()]
+        if not premises or not conclusions:
+            messagebox.showerror("Lỗi", "Phần Giả thiết và Kết luận không được rỗng.", parent=self)
             return
 
-        self.result = Rule(premises, conclusion, label, id=-1) # ID sẽ được cập nhật sau
+        # Ghép chuỗi logic: a AND b OR c
+        combined_premises = []
+        for i, p in enumerate(premises):
+            combined_premises.append(p)
+            if i < len(self.premise_ops):
+                combined_premises.append(self.premise_ops[i].get())
+        premise_expr = " ".join(combined_premises)
+
+        combined_conclusions = []
+        for i, c in enumerate(conclusions):
+            combined_conclusions.append(c)
+            if i < len(self.conclusion_ops):
+                combined_conclusions.append(self.conclusion_ops[i].get())
+        conclusion_expr = " ".join(combined_conclusions)
+
+        label = self.label_var.get().strip() or "R?"
+        self.result = Rule(premises=(premise_expr,), conclusion=conclusion_expr, label=label, id=-1)
         self.destroy()
+
 
 # ---------- GUI Application ----------
 class App(tk.Tk):
@@ -290,7 +353,7 @@ class App(tk.Tk):
         # Main frame
         main_frame = ttk.Frame(self, padding=10)
         main_frame.pack(fill="both", expand=True)
-        
+
         # Left side: Rules, Facts, Goals
         left_pane = ttk.Frame(main_frame)
         left_pane.pack(side="left", fill="both", expand=True, padx=(0, 10))
@@ -327,21 +390,27 @@ class App(tk.Tk):
         fc_frame = ttk.LabelFrame(right_pane, text="Tùy chọn Suy diễn Tiến", padding=10)
         fc_frame.pack(fill="x", pady=5)
         self.fc_conflict_mode = tk.StringVar(value="Queue")
-        ttk.Radiobutton(fc_frame, text="Tập THOA: Queue (FIFO)", variable=self.fc_conflict_mode, value="Queue").pack(anchor="w")
-        ttk.Radiobutton(fc_frame, text="Tập THOA: Stack (LIFO)", variable=self.fc_conflict_mode, value="Stack").pack(anchor="w")
-        
+        ttk.Radiobutton(fc_frame, text="Tập THOA: Queue (FIFO)", variable=self.fc_conflict_mode, value="Queue").pack(
+            anchor="w")
+        ttk.Radiobutton(fc_frame, text="Tập THOA: Stack (LIFO)", variable=self.fc_conflict_mode, value="Stack").pack(
+            anchor="w")
+
         ttk.Separator(fc_frame, orient="horizontal").pack(fill="x", pady=5)
-        
+
         self.fc_selection_mode = tk.StringVar(value="Min")
-        ttk.Radiobutton(fc_frame, text="Chọn luật: Chỉ số Min", variable=self.fc_selection_mode, value="Min").pack(anchor="w")
-        ttk.Radiobutton(fc_frame, text="Chọn luật: Chỉ số Max", variable=self.fc_selection_mode, value="Max").pack(anchor="w")
+        ttk.Radiobutton(fc_frame, text="Chọn luật: Chỉ số Min", variable=self.fc_selection_mode, value="Min").pack(
+            anchor="w")
+        ttk.Radiobutton(fc_frame, text="Chọn luật: Chỉ số Max", variable=self.fc_selection_mode, value="Max").pack(
+            anchor="w")
 
         # --- Backward Chaining Options ---
         bc_frame = ttk.LabelFrame(right_pane, text="Tùy chọn Suy diễn Lùi", padding=10)
         bc_frame.pack(fill="x", pady=5)
         self.bc_selection_mode = tk.StringVar(value="Min")
-        ttk.Radiobutton(bc_frame, text="Chọn luật: Chỉ số Min", variable=self.bc_selection_mode, value="Min").pack(anchor="w")
-        ttk.Radiobutton(bc_frame, text="Chọn luật: Chỉ số Max", variable=self.bc_selection_mode, value="Max").pack(anchor="w")
+        ttk.Radiobutton(bc_frame, text="Chọn luật: Chỉ số Min", variable=self.bc_selection_mode, value="Min").pack(
+            anchor="w")
+        ttk.Radiobutton(bc_frame, text="Chọn luật: Chỉ số Max", variable=self.bc_selection_mode, value="Max").pack(
+            anchor="w")
 
         # Control Buttons
         btn_frame = ttk.Frame(right_pane, padding=(0, 10))
@@ -352,7 +421,8 @@ class App(tk.Tk):
         ttk.Button(btn_frame, text="Vẽ FPG", command=self.on_draw_fpg).pack(fill="x", pady=2)
         ttk.Button(btn_frame, text="Vẽ RPG", command=self.on_draw_rpg).pack(fill="x", pady=2)
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
-        ttk.Button(btn_frame, text="Xóa kết quả", command=lambda: self.txt_out.delete("1.0", "end")).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="Xóa kết quả", command=lambda: self.txt_out.delete("1.0", "end")).pack(fill="x",
+                                                                                                          pady=2)
 
         rule_actions_frame = ttk.LabelFrame(right_pane, text="Quản lý Luật", padding=10)
         rule_actions_frame.pack(fill="x", pady=5)
@@ -361,9 +431,12 @@ class App(tk.Tk):
         inner_actions_frame = ttk.Frame(rule_actions_frame)
         inner_actions_frame.pack(fill="x", expand=True)
 
-        ttk.Button(inner_actions_frame, text="Thêm Luật", command=self.add_rule_action).pack(side="left", expand=True, fill="x", padx=2)
-        ttk.Button(inner_actions_frame, text="Sửa Luật", command=self.edit_rule_action).pack(side="left", expand=True, fill="x", padx=2)
-        ttk.Button(inner_actions_frame, text="Xóa Luật", command=self.delete_rule_action).pack(side="left", expand=True, fill="x", padx=2)
+        ttk.Button(inner_actions_frame, text="Thêm Luật", command=self.add_rule_action).pack(side="left", expand=True,
+                                                                                             fill="x", padx=2)
+        ttk.Button(inner_actions_frame, text="Sửa Luật", command=self.edit_rule_action).pack(side="left", expand=True,
+                                                                                             fill="x", padx=2)
+        ttk.Button(inner_actions_frame, text="Xóa Luật", command=self.delete_rule_action).pack(side="left", expand=True,
+                                                                                               fill="x", padx=2)
 
         input_grid = ttk.LabelFrame(right_pane, text="Dữ liệu vào", padding=10)
         input_grid.pack(fill="x", pady=5)
@@ -392,7 +465,7 @@ class App(tk.Tk):
 
     def _update_rules_display(self):
         """Cập nhật Listbox hiển thị từ self.last_rules."""
-        self.rules_listbox.delete(0, "end") # Xóa toàn bộ nội dung cũ
+        self.rules_listbox.delete(0, "end")  # Xóa toàn bộ nội dung cũ
         for i, r in enumerate(self.last_rules):
             # Cập nhật lại ID của luật để khớp với vị trí mới
             self.last_rules[i] = Rule(premises=r.premises, conclusion=r.conclusion, label=r.label, id=i)
@@ -404,7 +477,7 @@ class App(tk.Tk):
         if not self.rules_filepath:
             messagebox.showerror("Lỗi", "Không có file nào được mở để lưu.")
             return False
-        
+
         try:
             with open(self.rules_filepath, 'w', encoding='utf-8') as f:
                 for r in self.last_rules:
@@ -421,10 +494,10 @@ class App(tk.Tk):
         if not self.rules_filepath:
             messagebox.showerror("Lỗi", "Vui lòng tải một file luật trước khi thêm.")
             return
-        
+
         # Tạo cửa sổ con (Toplevel)
         editor = RuleEditor(self, title="Thêm Luật Mới")
-        if editor.result: # Nếu người dùng nhấn Lưu
+        if editor.result:  # Nếu người dùng nhấn Lưu
             new_rule = editor.result
             # Kiểm tra trùng lặp trước khi thêm
             canonical_key = (tuple(sorted(new_rule.premises)), new_rule.conclusion)
@@ -448,7 +521,7 @@ class App(tk.Tk):
             return
 
         original_rule = self.last_rules[selected_index]
-        
+
         editor = RuleEditor(self, title="Sửa Luật", rule=original_rule)
         if editor.result:
             self.last_rules[selected_index] = editor.result
@@ -463,7 +536,7 @@ class App(tk.Tk):
         except IndexError:
             messagebox.showwarning("Chưa chọn", "Vui lòng chọn một luật để xóa.")
             return
-        
+
         if messagebox.askyesno("Xác nhận", "Bạn có chắc chắn muốn xóa luật này?"):
             self.last_rules.pop(selected_index)
             if self._save_rules_to_file():
@@ -477,9 +550,9 @@ class App(tk.Tk):
             filetypes=(("Text Files", "*.txt"), ("All files", "*.*"))
         )
         if not filepath:
-            return # Người dùng không chọn file
+            return  # Người dùng không chọn file
 
-        self.rules_filepath = filepath # Lưu đường dẫn file
+        self.rules_filepath = filepath  # Lưu đường dẫn file
         self.last_rules = load_and_parse_rules(filepath)
         self._update_rules_display()
 
@@ -503,27 +576,28 @@ class App(tk.Tk):
 
         lines = []
         self.last_prov = {}
-        
+
         if mode == "Forward":
             if not goals:
                 messagebox.showerror("Lỗi đầu vào", "Mục tiêu (KL) không được rỗng cho Suy diễn tiến.")
                 return
-            
+
             conflict_mode = self.fc_conflict_mode.get()
             selection_mode = self.fc_selection_mode.get()
             lines.append(f"[Suy diễn Tiến - {conflict_mode} - Chỉ số {selection_mode}]")
-            
+
             if conflict_mode == "Queue":
                 known, prov, steps = forward_chain_bfs(self.last_rules, self.last_facts, selection_mode)
-            else: # Stack
+            else:  # Stack
                 known, prov, steps = forward_chain_dfs(self.last_rules, self.last_facts, selection_mode)
-            
+
             self.last_prov = prov
             lines.append(f"GT = {{{', '.join(sorted(self.last_facts))}}}")
             lines.append("Các bước suy diễn:")
             lines.extend(steps)
             ok_all = all(g in known for g in goals)
-            lines.append(f"\nKết quả: {'CHỨNG MINH ĐƯỢC' if ok_all else 'KHÔNG CHỨNG MINH ĐƯỢC'} KL = {{{', '.join(goals)}}}")
+            lines.append(
+                f"\nKết quả: {'CHỨNG MINH ĐƯỢC' if ok_all else 'KHÔNG CHỨNG MINH ĐƯỢC'} KL = {{{', '.join(goals)}}}")
 
         elif mode == "Backward":
             if not goals:
@@ -534,7 +608,7 @@ class App(tk.Tk):
             lines.append(f"[Suy diễn Lùi - Chỉ số {selection_mode}]")
             prov_for_fpg = {}
             all_goals_proved = True
-            
+
             for g in goals:
                 paths = backward_chain_all(g, self.last_rules, self.last_facts, set(), selection_mode)
                 if not paths:
@@ -544,11 +618,13 @@ class App(tk.Tk):
                     if selection_mode == 'Min':
                         min_len = min(len(p) for p in paths)
                         filtered_paths = [p for p in paths if len(p) == min_len]
-                        lines.append(f"\nTìm thấy {len(filtered_paths)} đường chứng minh NGẮN NHẤT cho '{g}' (Số bước: {min_len}):")
+                        lines.append(
+                            f"\nTìm thấy {len(filtered_paths)} đường chứng minh NGẮN NHẤT cho '{g}' (Số bước: {min_len}):")
                     else:  # 'Max'
                         max_len = max(len(p) for p in paths)
                         filtered_paths = [p for p in paths if len(p) == max_len]
-                        lines.append(f"\nTìm thấy {len(filtered_paths)} đường chứng minh DÀI NHẤT cho '{g}' (Số bước: {max_len}):")
+                        lines.append(
+                            f"\nTìm thấy {len(filtered_paths)} đường chứng minh DÀI NHẤT cho '{g}' (Số bước: {max_len}):")
 
                     for i, chain in enumerate(filtered_paths, 1):
                         lines.append(f"  Đường chứng minh #{i}:")
@@ -558,9 +634,10 @@ class App(tk.Tk):
                     best_path_rules = filtered_paths[0]
                     for r in best_path_rules:
                         prov_for_fpg[r.conclusion] = (r, r.premises)
-            
+
             self.last_prov = prov_for_fpg
-            lines.append(f"\nKết quả: {'CHỨNG MINH ĐƯỢC' if all_goals_proved else 'KHÔNG CHỨNG MINH ĐƯỢC'} KL = {{{', '.join(goals)}}}")
+            lines.append(
+                f"\nKết quả: {'CHỨNG MINH ĐƯỢC' if all_goals_proved else 'KHÔNG CHỨNG MINH ĐƯỢC'} KL = {{{', '.join(goals)}}}")
 
         self.txt_out.delete("1.0", "end")
         self.txt_out.insert("1.0", "\n".join(lines))
@@ -573,6 +650,7 @@ class App(tk.Tk):
             messagebox.showerror("Lỗi", "Vui lòng tải tập luật từ file để vẽ đồ thị.")
             return
         draw_rpg(self.last_rules)
+
 
 if __name__ == "__main__":
     app = App()
