@@ -242,13 +242,10 @@ class RuleEditor(tk.Toplevel):
         self.parent = parent
         self.result = None
 
-        self.premise_entries = []
-        self.premise_ops = []
-        self.premise_rows = []  # lưu các widget để dễ xóa
-
-        self.conclusion_entries = []
+        self.premise_entries = []   # danh sách ô nhập giả thiết
+        self.premise_ops = []       # danh sách menu chọn quan hệ (AND/OR)
+        self.conclusion_entries = []  # danh sách ô nhập kết luận
         self.conclusion_ops = []
-        self.conclusion_rows = []
 
         # Frame tổng
         body = ttk.Frame(self, padding=10)
@@ -257,18 +254,16 @@ class RuleEditor(tk.Toplevel):
         # --- Giả thiết ---
         ttk.Label(body, text="Giả thiết (Tiền đề):", font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w")
         self.premise_frame = ttk.Frame(body)
-        self.premise_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0))
-        self.premise_frame.columnconfigure(1, weight=1)
-        ttk.Button(body, text="+ Thêm Giả thiết", command=self.add_premise_field).grid(row=2, column=0, sticky="w", pady=(5, 0))
-        ttk.Label(body, text="& = AND, v = OR", foreground="gray").grid(row=2, column=1, sticky="e")
+        self.premise_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 10))
+        self.premise_frame.columnconfigure(0, weight=1)
+        ttk.Button(body, text="+ Thêm Giả thiết", command=self.add_premise_field).grid(row=2, column=0, sticky="w")
 
         # --- Kết luận ---
         ttk.Label(body, text="Kết luận:", font=("Segoe UI", 10, "bold")).grid(row=3, column=0, sticky="w", pady=(10, 0))
         self.conclusion_frame = ttk.Frame(body)
-        self.conclusion_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(5, 0))
-        self.conclusion_frame.columnconfigure(1, weight=1)
-        ttk.Button(body, text="+ Thêm Kết luận", command=self.add_conclusion_field).grid(row=5, column=0, sticky="w", pady=(5, 0))
-        ttk.Label(body, text="& = AND, v = OR", foreground="gray").grid(row=5, column=1, sticky="e")
+        self.conclusion_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(5, 10))
+        self.conclusion_frame.columnconfigure(0, weight=1)
+        ttk.Button(body, text="+ Thêm Kết luận", command=self.add_conclusion_field).grid(row=5, column=0, sticky="w")
 
         # --- Nhãn luật ---
         ttk.Label(body, text="Nhãn Luật:").grid(row=6, column=0, sticky="w", pady=(10, 0))
@@ -281,7 +276,7 @@ class RuleEditor(tk.Toplevel):
         ttk.Button(button_frame, text="Lưu", command=self.on_ok).pack(side="right", padx=5)
         ttk.Button(button_frame, text="Hủy", command=self.destroy).pack(side="right")
 
-        # Nếu là sửa
+        # Nếu là sửa, load dữ liệu cũ
         if rule:
             for p in rule.premises:
                 self.add_premise_field(p)
@@ -294,109 +289,29 @@ class RuleEditor(tk.Toplevel):
         self.grab_set()
         self.wait_window(self)
 
-    # ==============================
-    # HÀM THÊM VÀ XÓA GIẢ THIẾT / KẾT LUẬN
-    # ==============================
-
     def add_premise_field(self, value=""):
         row = len(self.premise_entries)
-        widgets = {}
-
-        # Toán tử (nếu không phải phần tử đầu)
         if row > 0:
-            op_var = tk.StringVar(value="&")
-            op_menu = ttk.Combobox(self.premise_frame, textvariable=op_var, values=["&", "v"], width=5)
+            op_var = tk.StringVar(value="AND")
+            op_menu = ttk.Combobox(self.premise_frame, textvariable=op_var, values=["AND", "OR"], width=5)
             op_menu.grid(row=row, column=0, padx=(0, 5), pady=2)
             self.premise_ops.append(op_var)
-            widgets["op_menu"] = op_menu
-        else:
-            widgets["op_menu"] = None
-
-        # Ô nhập
         entry = ttk.Entry(self.premise_frame, width=40)
         entry.grid(row=row, column=1, sticky="ew", pady=2)
         entry.insert(0, value)
         self.premise_entries.append(entry)
-        widgets["entry"] = entry
-
-        # Nút xóa
-        btn = ttk.Button(self.premise_frame, text="🗑", width=3, command=lambda: self.remove_premise_field(row))
-        btn.grid(row=row, column=2, padx=(5, 0))
-        widgets["delete"] = btn
-
-        self.premise_rows.append(widgets)
-
-    def remove_premise_field(self, index):
-        """Xóa 1 dòng giả thiết theo index."""
-        # Hủy widget
-        row_widgets = self.premise_rows[index]
-        for w in row_widgets.values():
-            if w:
-                w.destroy()
-
-        # Xóa phần tử khỏi list
-        del self.premise_entries[index]
-        if index > 0 and index - 1 < len(self.premise_ops):
-            del self.premise_ops[index - 1]
-        del self.premise_rows[index]
-
-        # Cập nhật lại layout
-        for widget in self.premise_frame.winfo_children():
-            widget.grid_forget()
-        for i, w in enumerate(self.premise_rows):
-            if w["op_menu"]:
-                w["op_menu"].grid(row=i, column=0, padx=(0, 5), pady=2)
-            w["entry"].grid(row=i, column=1, sticky="ew", pady=2)
-            w["delete"].grid(row=i, column=2, padx=(5, 0))
 
     def add_conclusion_field(self, value=""):
         row = len(self.conclusion_entries)
-        widgets = {}
-
         if row > 0:
-            op_var = tk.StringVar(value="&")
-            op_menu = ttk.Combobox(self.conclusion_frame, textvariable=op_var, values=["&", "v"], width=5)
+            op_var = tk.StringVar(value="AND")
+            op_menu = ttk.Combobox(self.conclusion_frame, textvariable=op_var, values=["AND", "OR"], width=5)
             op_menu.grid(row=row, column=0, padx=(0, 5), pady=2)
             self.conclusion_ops.append(op_var)
-            widgets["op_menu"] = op_menu
-        else:
-            widgets["op_menu"] = None
-
         entry = ttk.Entry(self.conclusion_frame, width=40)
         entry.grid(row=row, column=1, sticky="ew", pady=2)
         entry.insert(0, value)
         self.conclusion_entries.append(entry)
-        widgets["entry"] = entry
-
-        btn = ttk.Button(self.conclusion_frame, text="🗑", width=3, command=lambda: self.remove_conclusion_field(row))
-        btn.grid(row=row, column=2, padx=(5, 0))
-        widgets["delete"] = btn
-
-        self.conclusion_rows.append(widgets)
-
-    def remove_conclusion_field(self, index):
-        """Xóa 1 dòng kết luận theo index."""
-        row_widgets = self.conclusion_rows[index]
-        for w in row_widgets.values():
-            if w:
-                w.destroy()
-
-        del self.conclusion_entries[index]
-        if index > 0 and index - 1 < len(self.conclusion_ops):
-            del self.conclusion_ops[index - 1]
-        del self.conclusion_rows[index]
-
-        for widget in self.conclusion_frame.winfo_children():
-            widget.grid_forget()
-        for i, w in enumerate(self.conclusion_rows):
-            if w["op_menu"]:
-                w["op_menu"].grid(row=i, column=0, padx=(0, 5), pady=2)
-            w["entry"].grid(row=i, column=1, sticky="ew", pady=2)
-            w["delete"].grid(row=i, column=2, padx=(5, 0))
-
-    # ==============================
-    # XỬ LÝ LƯU DỮ LIỆU
-    # ==============================
 
     def on_ok(self):
         premises = [e.get().strip() for e in self.premise_entries if e.get().strip()]
@@ -405,6 +320,7 @@ class RuleEditor(tk.Toplevel):
             messagebox.showerror("Lỗi", "Phần Giả thiết và Kết luận không được rỗng.", parent=self)
             return
 
+        # Ghép chuỗi logic: a AND b OR c
         combined_premises = []
         for i, p in enumerate(premises):
             combined_premises.append(p)
@@ -422,7 +338,6 @@ class RuleEditor(tk.Toplevel):
         label = self.label_var.get().strip() or "R?"
         self.result = Rule(premises=(premise_expr,), conclusion=conclusion_expr, label=label, id=-1)
         self.destroy()
-
 
 
 # ---------- GUI Application ----------
