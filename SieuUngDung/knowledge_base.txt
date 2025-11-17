@@ -1,0 +1,19 @@
+a book: a chapter, a ledger, a novel, a text, entertainment, learning, paper, the bible
+a car: a bumper, a horn, a tire, an engine, fun, honda
+a device: a phone, a television
+a machine: phone
+a motor vehicle: a car
+a pen: writing letters
+a phone: calling, communication, make a call
+a table: a leg, eat at, eating off of
+animation: anime
+anime: anime movie, entertainment
+car: a bmw, a volvo, an oldsmobile, volkswagen, wheels
+cartoon: animee
+library: a book
+natural resin: anime
+pen: creep, felt-tip pen, fold, fountain pen, holding paddock, plastic, sty
+phone: consonant, orinasal phone, phoneme, sonant
+smartphone: n97, palm smart phone
+swan: pen
+vehicle: a car
