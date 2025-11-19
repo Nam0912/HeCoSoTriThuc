@@ -1,0 +1,34 @@
+
+# Generated Rules for Topics: máy tính
+computer accessory & hardware & disk cache -> computer | Rule_CauTao_computer
+dedicated file server v non-dedicated file server -> file server | Rule_PhanLoai_OR_file_server_0
+laptop v notebook v hand-held computer v briefcase computer -> portable computer | Rule_PhanLoai_OR_portable_computer_0
+mainframe v multiprocessor v minicomputer v bulletin board system -> digital computer | Rule_PhanLoai_OR_digital_computer_0
+microprocessor & pc board -> personal computer | Rule_CauTao_personal_computer
+pari-mutuel machine v node v digital computer v predictor -> computer | Rule_PhanLoai_OR_computer_4
+planner -> notebook | Rule_IsA_notebook_0
+portable computer v desktop computer -> personal computer | Rule_PhanLoai_OR_personal_computer_0
+portal site v chat room -> web site | Rule_PhanLoai_OR_web_site_0
+server v analog computer v turing machine v home computer -> computer | Rule_PhanLoai_OR_computer_0
+slide rule v differential analyzer -> analog computer | Rule_PhanLoai_OR_analog_computer_0
+supercomputer -> mainframe | Rule_IsA_mainframe_0
+web site v number cruncher -> computer | Rule_PhanLoai_OR_computer_8
+workstation v file server v personal computer v von neumann machine -> digital computer | Rule_PhanLoai_OR_digital_computer_4
+bath chair v motorized wheelchair -> wheelchair | Rule_PhanLoai_OR_wheelchair_0
+camp chair v yacht chair v deck chair -> folding chair | Rule_PhanLoai_OR_folding_chair_0
+captain's chair v morris chair v fauteuil v recliner -> armchair | Rule_PhanLoai_OR_armchair_0
+easy chair -> armchair | Rule_IsA_armchair_4
+folding chair v wheelchair v rocking chair v barber chair -> chair | Rule_PhanLoai_OR_chair_8
+ladder-back v armchair v chaise longue v fighting chair -> chair | Rule_PhanLoai_OR_chair_4
+lawn chair v eames chair v highchair -> chair | Rule_PhanLoai_OR_chair_12
+leg & back -> chair | Rule_CauTao_chair
+musnud v cathedra v peacock-throne v mercy seat -> throne | Rule_PhanLoai_OR_throne_0
+rung & rocker -> rocking chair | Rule_CauTao_rocking_chair
+rung & splat -> straight chair | Rule_CauTao_straight_chair
+shoofly v platform rocker v boston rocker -> rocking chair | Rule_PhanLoai_OR_rocking_chair_0
+tablet-armed chair v straight chair v swivel chair v chair of state -> chair | Rule_PhanLoai_OR_chair_0
+throne -> chair of state | Rule_IsA_chair_of_state_0
+windsor chair -> straight chair | Rule_IsA_straight_chair_0
+wing chair -> easy chair | Rule_IsA_easy_chair_0
+penalty box v prie-dieu v banquette v park bench -> bench | Rule_PhanLoai_OR_bench_4
+pew v settle v flat bench v window seat -> bench | Rule_PhanLoai_OR_bench_0

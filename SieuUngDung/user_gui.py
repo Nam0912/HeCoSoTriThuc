@@ -214,22 +214,18 @@ class UserGUI:
             self.steps_text.insert(tk.END,
                                    "Không có luật nào được kích hoạt. Các Facts đã nhập không dẫn đến kết luận mới.")
 
-    # ======================
-    # Ảnh minh họa bằng Pixabay
-    # ======================
     def show_image(self, keyword):
         """Tải và hiển thị ảnh minh họa cho keyword"""
         try:
             # Sử dụng key mẫu của bạn
             api_key = "53101775-37777e069e2eb137c3c11588e"
             url = f"https://pixabay.com/api/?key={api_key}&q={keyword}&image_type=photo&per_page=3"
-            headers = {"User-Agent": "Mozilla/5.0"}
 
             response = requests.get(url, headers=headers, timeout=6)
             response.raise_for_status()  # Raise exception cho lỗi HTTP
             data = response.json()
 
-            if "hits" in data and data["hits"]:
+            if data.get("hits"):
                 img_url = data["hits"][0]["webformatURL"]
                 img_data = requests.get(img_url, headers=headers, timeout=6).content
                 img = Image.open(BytesIO(img_data)).resize((260, 260), Image.Resampling.LANCZOS)
@@ -247,9 +243,6 @@ class UserGUI:
             self.img_label.config(image="", text="(Lỗi xử lý ảnh)")
 
 
-# ======================
-# CHẠY GIAO DIỆN
-# ======================
 if __name__ == "__main__":
     root = tk.Tk()
     app = UserGUI(root)
