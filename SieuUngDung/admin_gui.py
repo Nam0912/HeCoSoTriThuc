@@ -1,6 +1,6 @@
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from deep_translator import GoogleTranslator
 import nltk
 from nltk.corpus import wordnet as wn
 
@@ -24,35 +24,20 @@ def clean_term(term):
 
 
 def sinh_luat_tu_wordnet(ds_tu_viet):
-    """
-    Hàm chính:
-    1. Dịch từ Việt -> Anh
-    2. Tra cứu WordNet
-    3. Sinh luật AND (Cấu tạo) và OR (Phân loại)
-    """
-    translator = GoogleTranslator(source='vi', target='en')
 
-    # Bước 1: Dịch danh sách đầu vào
-    try:
-        # Dịch từng từ một để đảm bảo chính xác
-        ds_tieng_anh = [translator.translate(t.strip()).lower() for t in ds_tu_viet if t.strip()]
-    except Exception as e:
-        messagebox.showerror("Lỗi Dịch", f"Không thể kết nối Google Translate: {e}")
-        return []
+    ds_tieng_anh = [t.strip().lower() for t in ds_tu_viet if t.strip()]
 
-    rules = set()  # Dùng set để loại bỏ trùng lặp
+    rules = set()
     processed_synsets = set()
 
-    # Bước 2: Duyệt qua từng chủ đề
+    # Duyệt từng chủ đề
     for topic in ds_tieng_anh:
         synsets = wn.synsets(topic)
         if not synsets:
             continue
 
-        # Dùng hàng đợi BFS để duyệt cây
         queue = [synsets[0]]
 
-        # Giới hạn số lượng node duyệt để không bị treo máy nếu chủ đề quá rộng
         max_nodes = 50
         count = 0
 
@@ -66,40 +51,34 @@ def sinh_luat_tu_wordnet(ds_tu_viet):
 
             current_name = clean_term(current_syn)
 
-            # --- LOẠI 1: LUẬT AND (&) - CẤU TẠO (Parts -> Whole) ---
-            # Logic: part1 & part2 -> whole
+            # --- LUẬT AND: CẤU TẠO ---
             parts = current_syn.part_meronyms()
             part_names = [clean_term(p) for p in parts if clean_term(p) != current_name]
 
-            # Chỉ tạo luật AND nếu có >= 2 bộ phận
             if len(part_names) >= 2:
-                selected_parts = part_names[:3]  # Lấy tối đa 3 bộ phận
+                selected_parts = part_names[:3]
                 premises = " & ".join(selected_parts)
-                # Format: Giả thiết -> Kết luận | Nhãn
                 rule_str = f"{premises} -> {current_name} | Rule_CauTao_{current_name.replace(' ', '_')}"
                 rules.add(rule_str)
 
-            # --- LOẠI 2: LUẬT OR (v) - PHÂN LOẠI (Children -> Parent) ---
-            # Logic: child1 v child2 -> parent
+            # --- LUẬT OR: PHÂN LOẠI ---
             hyponyms = current_syn.hyponyms()
             child_names = [clean_term(c) for c in hyponyms if clean_term(c) != current_name]
 
-            # Chia nhỏ danh sách con thành các nhóm (chunk) để tạo luật OR
             chunk_size = 4
             for i in range(0, len(child_names), chunk_size):
                 chunk = child_names[i:i + chunk_size]
-                if len(chunk) > 0:
-                    if len(chunk) > 1:
-                        premises = " v ".join(chunk)
-                        label = f"Rule_PhanLoai_OR_{current_name.replace(' ', '_')}_{i}"
-                    else:
-                        premises = chunk[0]
-                        label = f"Rule_IsA_{current_name.replace(' ', '_')}_{i}"
+                if len(chunk) > 1:
+                    premises = " v ".join(chunk)
+                    label = f"Rule_PhanLoai_OR_{current_name.replace(' ', '_')}_{i}"
+                else:
+                    premises = chunk[0]
+                    label = f"Rule_IsA_{current_name.replace(' ', '_')}_{i}"
 
-                    rule_str = f"{premises} -> {current_name} | {label}"
-                    rules.add(rule_str)
+                rule_str = f"{premises} -> {current_name} | {label}"
+                rules.add(rule_str)
 
-            # Mở rộng duyệt xuống con
+            # Duyệt xuống con
             for child in hyponyms:
                 if child.name() not in processed_synsets:
                     queue.append(child)
@@ -123,7 +102,7 @@ class AdminGUI(tk.Tk):
         top_frame.pack(fill="x")
 
         ttk.Label(top_frame, text="CÔNG CỤ SINH LUẬT TỰ ĐỘNG", font=("Segoe UI", 16, "bold")).pack()
-        ttk.Label(top_frame, text="Nhập chủ đề tiếng Việt (VD: xe hơi, máy tính, động vật)",
+        ttk.Label(top_frame, text="Nhập chủ đề tiếng Anh (VD: car, computer, animal)",
                   font=("Segoe UI", 10)).pack(pady=(5, 0))
 
         # Input Area
@@ -132,15 +111,15 @@ class AdminGUI(tk.Tk):
 
         self.entry = ttk.Entry(input_frame, font=("Segoe UI", 11))
         self.entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.entry.bind("<Return>", lambda event: self.on_generate())  # Enter để chạy
+        self.entry.bind("<Return>", lambda event: self.on_generate())
 
         ttk.Button(input_frame, text="🚀 Sinh Luật Ngay", command=self.on_generate).pack(side="right")
 
         # Action Buttons
         btn_frame = ttk.Frame(self, padding=(20, 0, 20, 10))
         btn_frame.pack(fill="x")
-        ttk.Button(btn_frame, text="💾 Lưu file .txt (cho ToanHoc.py)", command=self.on_save).pack(side="right")
-        ttk.Button(btn_frame, text="🗑 Xóa màn hình", command=lambda: self.text_area.delete(1.0, tk.END)).pack(
+        ttk.Button(btn_frame, text="💾 Lưu Luật", command=self.on_save).pack(side="right")
+        ttk.Button(btn_frame, text="🗑 Clear", command=lambda: self.text_area.delete(1.0, tk.END)).pack(
             side="right", padx=5)
 
         # Result Area
@@ -163,23 +142,21 @@ class AdminGUI(tk.Tk):
     def on_generate(self):
         user_input = self.entry.get().strip()
         if not user_input:
-            messagebox.showwarning("Thiếu dữ liệu", "Vui lòng nhập ít nhất một chủ đề (tiếng Việt).")
+            messagebox.showwarning("Thiếu dữ liệu", "Vui lòng nhập ít nhất một chủ đề tiếng Anh.")
             return
 
-        self.status_var.set("Đang xử lý... Vui lòng đợi (Dịch & Tra cứu WordNet)...")
-        self.update_idletasks()  # Cập nhật UI ngay lập tức
+        self.status_var.set("Đang xử lý WordNet... Vui lòng đợi...")
+        self.update_idletasks()
 
         ds_chu_de = [x.strip() for x in user_input.split(",") if x.strip()]
 
-        # Gọi hàm xử lý WordNet
         self.generated_rules = sinh_luat_tu_wordnet(ds_chu_de)
 
         if not self.generated_rules:
-            self.status_var.set("Không tìm thấy luật nào phù hợp.")
-            messagebox.showinfo("Kết quả", "Không tìm thấy tri thức phù hợp trong WordNet hoặc lỗi dịch.")
+            self.status_var.set("Không tìm thấy luật.")
+            messagebox.showinfo("Kết quả", "Không tìm thấy tri thức phù hợp trong WordNet.")
             return
 
-        # Hiển thị kết quả
         self.text_area.delete(1.0, tk.END)
         self.text_area.insert(tk.END, f"# Generated Rules for Topics: {user_input}\n")
         for rule in self.generated_rules:
@@ -193,21 +170,37 @@ class AdminGUI(tk.Tk):
             messagebox.showwarning("Trống", "Không có nội dung để lưu.")
             return
 
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
-            title="Lưu tập luật"
-        )
+        file_path = "wordnet.txt"  # luôn ghi vào file này
 
-        if file_path:
-            try:
-                # Chế độ 'a' (append) để nối thêm vào file cũ, hoặc 'w' để ghi mới
-                # Ở đây dùng 'a' để người dùng có thể tích lũy tri thức
-                with open(file_path, "a", encoding="utf-8") as f:
-                    f.write("\n" + content + "\n")
-                messagebox.showinfo("Thành công", f"Đã lưu luật vào: {file_path}")
-            except Exception as e:
-                messagebox.showerror("Lỗi lưu file", str(e))
+        # Đọc luật cũ nếu có
+        existing_rules = set()
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    rule = line.strip()
+                    if rule:
+                        existing_rules.add(rule)
+
+        # Lấy luật mới
+        new_rules = set()
+        for line in content.split("\n"):
+            rule = line.strip()
+            if rule and not rule.startswith("#"):
+                new_rules.add(rule)
+
+        # Lọc những luật mới thực sự
+        rules_to_add = new_rules - existing_rules
+
+        if not rules_to_add:
+            messagebox.showinfo("Thông báo", "Không có luật mới để thêm. File đã đầy đủ.")
+            return
+
+        # Ghi nối vào file wordnet.txt
+        with open(file_path, "a", encoding="utf-8") as f:
+            for r in sorted(rules_to_add):
+                f.write(r + "\n")
+
+        messagebox.showinfo("Thành công", f"Đã thêm {len(rules_to_add)} luật mới vào file wordnet.txt")
 
 
 if __name__ == "__main__":
