@@ -1,0 +1,16 @@
+
+# Generated Rules for Topics: máy tính
+computer accessory & hardware & disk cache -> computer | Rule_CauTao_computer
+dedicated file server v non-dedicated file server -> file server | Rule_PhanLoai_OR_file_server_0
+laptop v notebook v hand-held computer v briefcase computer -> portable computer | Rule_PhanLoai_OR_portable_computer_0
+mainframe v multiprocessor v minicomputer v bulletin board system -> digital computer | Rule_PhanLoai_OR_digital_computer_0
+microprocessor & pc board -> personal computer | Rule_CauTao_personal_computer
+pari-mutuel machine v node v digital computer v predictor -> computer | Rule_PhanLoai_OR_computer_4
+planner -> notebook | Rule_IsA_notebook_0
+portable computer v desktop computer -> personal computer | Rule_PhanLoai_OR_personal_computer_0
+portal site v chat room -> web site | Rule_PhanLoai_OR_web_site_0
+server v analog computer v turing machine v home computer -> computer | Rule_PhanLoai_OR_computer_0
+slide rule v differential analyzer -> analog computer | Rule_PhanLoai_OR_analog_computer_0
+supercomputer -> mainframe | Rule_IsA_mainframe_0
+web site v number cruncher -> computer | Rule_PhanLoai_OR_computer_8
+workstation v file server v personal computer v von neumann machine -> digital computer | Rule_PhanLoai_OR_digital_computer_4
