@@ -1,131 +1,206 @@
-import requests
+import os
 import tkinter as tk
-from tkinter import ttk, messagebox
-from googletrans import Translator
-from collections import defaultdict
+from tkinter import ttk, messagebox, filedialog
+import nltk
+from nltk.corpus import wordnet as wn
 
-translator = Translator()
+# ==========================================
+# CẤU HÌNH NLTK (Tải dữ liệu lần đầu)
+# ==========================================
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    print("Đang tải dữ liệu WordNet...")
+    nltk.download('wordnet')
 
-useful_relations = {"UsedFor", "MadeOf", "PartOf", "IsA"}
-ban_words = {"thing", "object", "something", "someone", "money", "news", "page",
-             "marker", "note", "card", "booklet", "item"}
+
+# ==========================================
+# LOGIC XỬ LÝ WORDNET (CORE ENGINE)
+# ==========================================
+
+def clean_term(term):
+    """Chuẩn hóa từ: chữ thường, thay dấu _ bằng khoảng trắng"""
+    return term.lemmas()[0].name().lower().replace('_', ' ')
 
 
-def tra_cuu_conceptnet(concept_en, limit=50):
-    """Truy vấn ConceptNet và sinh các quan hệ hợp lệ"""
-    url = f"https://api.conceptnet.io/c/en/{concept_en}?offset=0&limit={limit}"
-    try:
-        data = requests.get(url).json()
-    except Exception as e:
-        messagebox.showerror("Lỗi", f"Lỗi khi truy cập ConceptNet: {e}")
-        return []
+def sinh_luat_tu_wordnet(ds_tu_viet):
 
-    edges = []
-    for edge in data.get("edges", []):
-        rel = edge["rel"]["label"]
-        if rel not in useful_relations:
+    ds_tieng_anh = [t.strip().lower() for t in ds_tu_viet if t.strip()]
+
+    rules = set()
+    processed_synsets = set()
+
+    # Duyệt từng chủ đề
+    for topic in ds_tieng_anh:
+        synsets = wn.synsets(topic)
+        if not synsets:
             continue
 
-        start = edge["start"]["label"].lower()
-        end = edge["end"]["label"].lower()
+        queue = [synsets[0]]
 
-        if not (edge["start"]["@id"].startswith("/c/en/") and edge["end"]["@id"].startswith("/c/en/")):
-            continue
+        max_nodes = 50
+        count = 0
 
-        if any(bad in start for bad in ban_words) or any(bad in end for bad in ban_words):
-            continue
+        while queue and count < max_nodes:
+            current_syn = queue.pop(0)
 
-        edges.append((start, rel, end))
-    return edges
+            if current_syn.name() in processed_synsets:
+                continue
+            processed_synsets.add(current_syn.name())
+            count += 1
+
+            current_name = clean_term(current_syn)
+
+            # --- LUẬT AND: CẤU TẠO ---
+            parts = current_syn.part_meronyms()
+            part_names = [clean_term(p) for p in parts if clean_term(p) != current_name]
+
+            if len(part_names) >= 2:
+                selected_parts = part_names[:3]
+                premises = " & ".join(selected_parts)
+                rule_str = f"{premises} -> {current_name} | Rule_CauTao_{current_name.replace(' ', '_')}"
+                rules.add(rule_str)
+
+            # --- LUẬT OR: PHÂN LOẠI ---
+            hyponyms = current_syn.hyponyms()
+            child_names = [clean_term(c) for c in hyponyms if clean_term(c) != current_name]
+
+            chunk_size = 4
+            for i in range(0, len(child_names), chunk_size):
+                chunk = child_names[i:i + chunk_size]
+                if len(chunk) > 1:
+                    premises = " v ".join(chunk)
+                    label = f"Rule_PhanLoai_OR_{current_name.replace(' ', '_')}_{i}"
+                else:
+                    premises = chunk[0]
+                    label = f"Rule_IsA_{current_name.replace(' ', '_')}_{i}"
+
+                rule_str = f"{premises} -> {current_name} | {label}"
+                rules.add(rule_str)
+
+            # Duyệt xuống con
+            for child in hyponyms:
+                if child.name() not in processed_synsets:
+                    queue.append(child)
+
+    return sorted(list(rules))
 
 
-def sinh_luat_tu_conceptnet(ds_tu_viet):
-    """Sinh luật tri thức từ ConceptNet"""
-    en_list = [translator.translate(t.strip(), src="vi", dest="en").text.lower() for t in ds_tu_viet]
-    feature_map = defaultdict(set)
-
-    for concept in en_list:
-        edges = tra_cuu_conceptnet(concept)
-        for s, rel, e in edges:
-            # Định hướng luật
-            if rel in ("MadeOf", "UsedFor"):
-                feature_map[s].add(e)
-            elif rel in ("PartOf", "IsA"):
-                feature_map[e].add(s)
-
-    return feature_map
-
-
-def tai_luat(filename="knowledge_base.txt"):
-    """Tải dữ liệu cũ từ file"""
-    data = defaultdict(set)
-    try:
-        with open(filename, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or ":" not in line:
-                    continue
-                obj, feats = line.split(":", 1)
-                feats = [x.strip() for x in feats.split(",") if x.strip()]
-                data[obj.strip()].update(feats)
-    except FileNotFoundError:
-        pass
-    return data
-
-
-def luu_luat(feature_map, filename="knowledge_base.txt"):
-    """Gộp (merge) với dữ liệu cũ và lưu lại"""
-    old_data = tai_luat(filename)
-    for obj, feats in feature_map.items():
-        old_data[obj].update(feats)
-
-    with open(filename, "w", encoding="utf-8") as f:
-        for obj, feats in sorted(old_data.items()):
-            f.write(f"{obj}: {', '.join(sorted(feats))}\n")
-
+# ==========================================
+# GIAO DIỆN QUẢN TRỊ (ADMIN GUI)
+# ==========================================
 
 class AdminGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("🧩 Quản lý Tri thức (Admin)")
-        self.geometry("850x650")
-        self.configure(bg="#f7f7f7")
+        self.title("🧩 Admin: Sinh Luật Suy Diễn (WordNet Integration)")
+        self.geometry("900x700")
+        self.configure(bg="#f0f2f5")
 
-        ttk.Label(self, text="Nhập các khái niệm cần sinh luật (cách nhau dấu phẩy):",
-                  font=("Arial", 12)).pack(pady=10)
-        self.entry = ttk.Entry(self, width=80)
-        self.entry.pack(pady=5)
+        # Header
+        top_frame = ttk.Frame(self, padding=20)
+        top_frame.pack(fill="x")
 
-        ttk.Button(self, text="Sinh luật từ ConceptNet", command=self.on_generate).pack(pady=10)
-        ttk.Button(self, text="Lưu vào knowledge_base.txt", command=self.on_save).pack(pady=5)
+        ttk.Label(top_frame, text="CÔNG CỤ SINH LUẬT TỰ ĐỘNG", font=("Segoe UI", 16, "bold")).pack()
+        ttk.Label(top_frame, text="Nhập chủ đề tiếng Anh (VD: car, computer, animal)",
+                  font=("Segoe UI", 10)).pack(pady=(5, 0))
 
-        ttk.Label(self, text="Danh sách tri thức (vật -> đặc trưng):", font=("Arial", 12)).pack(pady=10)
-        self.text = tk.Text(self, width=100, height=25)
-        self.text.pack(pady=5)
+        # Input Area
+        input_frame = ttk.Frame(self, padding=20)
+        input_frame.pack(fill="x")
 
-        self.feature_map = {}
+        self.entry = ttk.Entry(input_frame, font=("Segoe UI", 11))
+        self.entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.entry.bind("<Return>", lambda event: self.on_generate())
+
+        ttk.Button(input_frame, text="🚀 Sinh Luật Ngay", command=self.on_generate).pack(side="right")
+
+        # Action Buttons
+        btn_frame = ttk.Frame(self, padding=(20, 0, 20, 10))
+        btn_frame.pack(fill="x")
+        ttk.Button(btn_frame, text="💾 Lưu Luật", command=self.on_save).pack(side="right")
+        ttk.Button(btn_frame, text="🗑 Clear", command=lambda: self.text_area.delete(1.0, tk.END)).pack(
+            side="right", padx=5)
+
+        # Result Area
+        list_frame = ttk.LabelFrame(self, text="Kết quả Luật sinh ra:", padding=10)
+        list_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        self.text_area = tk.Text(list_frame, font=("Consolas", 10), height=20)
+        self.text_area.pack(side="left", fill="both", expand=True)
+
+        scrollbar = ttk.Scrollbar(list_frame, command=self.text_area.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.text_area.config(yscrollcommand=scrollbar.set)
+
+        # Status bar
+        self.status_var = tk.StringVar(value="Sẵn sàng.")
+        ttk.Label(self, textvariable=self.status_var, relief="sunken", anchor="w").pack(fill="x")
+
+        self.generated_rules = []
 
     def on_generate(self):
-        tu_nhap = self.entry.get().strip()
-        if not tu_nhap:
-            messagebox.showwarning("Thiếu dữ liệu", "Vui lòng nhập ít nhất một khái niệm.")
+        user_input = self.entry.get().strip()
+        if not user_input:
+            messagebox.showwarning("Thiếu dữ liệu", "Vui lòng nhập ít nhất một chủ đề tiếng Anh.")
             return
 
-        ds = [x.strip() for x in tu_nhap.split(",") if x.strip()]
-        self.feature_map = sinh_luat_tu_conceptnet(ds)
+        self.status_var.set("Đang xử lý WordNet... Vui lòng đợi...")
+        self.update_idletasks()
 
-        self.text.delete(1.0, tk.END)
-        for obj, feats in self.feature_map.items():
-            self.text.insert(tk.END, f"{obj}: {', '.join(feats)}\n")
+        ds_chu_de = [x.strip() for x in user_input.split(",") if x.strip()]
 
-        messagebox.showinfo("Thành công", f"Đã sinh tri thức cho {len(self.feature_map)} vật.")
+        self.generated_rules = sinh_luat_tu_wordnet(ds_chu_de)
+
+        if not self.generated_rules:
+            self.status_var.set("Không tìm thấy luật.")
+            messagebox.showinfo("Kết quả", "Không tìm thấy tri thức phù hợp trong WordNet.")
+            return
+
+        self.text_area.delete(1.0, tk.END)
+        self.text_area.insert(tk.END, f"# Generated Rules for Topics: {user_input}\n")
+        for rule in self.generated_rules:
+            self.text_area.insert(tk.END, rule + "\n")
+
+        self.status_var.set(f"Hoàn tất! Đã sinh {len(self.generated_rules)} luật.")
 
     def on_save(self):
-        if not self.feature_map:
-            messagebox.showwarning("Chưa có dữ liệu", "Bạn cần sinh tri thức trước khi lưu.")
+        content = self.text_area.get(1.0, tk.END).strip()
+        if not content:
+            messagebox.showwarning("Trống", "Không có nội dung để lưu.")
             return
-        luu_luat(self.feature_map)
-        messagebox.showinfo("Lưu thành công", "Đã hợp nhất và lưu vào file knowledge_base.txt")
+
+        file_path = "wordnet.txt"  # luôn ghi vào file này
+
+        # Đọc luật cũ nếu có
+        existing_rules = set()
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    rule = line.strip()
+                    if rule:
+                        existing_rules.add(rule)
+
+        # Lấy luật mới
+        new_rules = set()
+        for line in content.split("\n"):
+            rule = line.strip()
+            if rule and not rule.startswith("#"):
+                new_rules.add(rule)
+
+        # Lọc những luật mới thực sự
+        rules_to_add = new_rules - existing_rules
+
+        if not rules_to_add:
+            messagebox.showinfo("Thông báo", "Không có luật mới để thêm. File đã đầy đủ.")
+            return
+
+        # Ghi nối vào file wordnet.txt
+        with open(file_path, "a", encoding="utf-8") as f:
+            for r in sorted(rules_to_add):
+                f.write(r + "\n")
+
+        messagebox.showinfo("Thành công", f"Đã thêm {len(rules_to_add)} luật mới vào file wordnet.txt")
 
 
 if __name__ == "__main__":

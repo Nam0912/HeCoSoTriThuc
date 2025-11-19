@@ -19,14 +19,14 @@ class Rule:
     conclusion: str
     label: str
     id: int  # Thêm ID để theo dõi chỉ số
-
+    op: str  # MỚI: 'AND' hoặc 'OR'
 
 def load_and_parse_rules(filepath: str) -> List[Rule]:
     """
     Đọc luật từ file, xác thực, loại bỏ trùng lặp và trả về danh sách luật hợp lệ.
+    Hỗ trợ AND (&) hoặc OR (v) cho tiền đề, nhưng không hỗ trợ trộn lẫn.
     """
     rules: List[Rule] = []
-    # Dùng set để lưu trữ các luật đã thấy (dưới dạng chuẩn hóa) để chống trùng lặp
     seen_rules_canonical = set()
 
     try:
@@ -36,40 +36,56 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
                 if not raw or raw.startswith("#"):
                     continue
 
-                # 1. KIỂM TRA ĐỊNH DẠNG
                 if "->" not in raw:
                     print(f"Bỏ qua dòng {line_num}: Thiếu '->'. Nội dung: '{raw}'")
                     continue
 
                 left, right = raw.split("->", 1)
-                left = left.replace("^", "&")
-                premises = tuple(sorted([p.strip() for p in left.split("&") if p.strip()]))  # Sắp xếp tiền đề
+                left = left.replace("^", "&").strip()
 
-                if not premises:
+                op = 'AND'  # Mặc định
+                premises_list = []
+
+                has_and = "&" in left
+                has_or = "v" in left
+
+                if has_and and has_or:
+                    print(f"Bỏ qua dòng {line_num}: Luật chứa cả '&' và 'v' không được hỗ trợ. Nội dung: '{raw}'")
+                    continue
+                elif has_or:
+                    op = 'OR'
+                    premises_list = [p.strip() for p in left.split("v") if p.strip()]
+                else:  # Mặc định là AND (dù có & hay không)
+                    op = 'AND'
+                    premises_list = [p.strip() for p in left.split("&") if p.strip()]
+
+                if not premises_list:
                     print(f"Bỏ qua dòng {line_num}: Luật không có tiền đề. Nội dung: '{raw}'")
                     continue
+
+                # Sắp xếp tiền đề để kiểm tra trùng lặp
+                premises_sorted = tuple(sorted(premises_list))
 
                 if "|" in right:
                     concl, label = right.split("|", 1)
                 else:
-                    # Gán nhãn mặc định nếu không có
                     concl, label = right, f"R{len(rules) + 1}"
 
                 conclusion = concl.strip()
                 label = label.strip()
 
                 # 2. KIỂM TRA TRÙNG LẶP
-                # Tạo một "key" đại diện cho luật, không phụ thuộc thứ tự tiền đề
-                canonical_key = (premises, conclusion)
+                # Thêm 'op' vào key để phân biệt A&B->C và A v B->C
+                canonical_key = (premises_sorted, conclusion, op)
                 if canonical_key in seen_rules_canonical:
                     print(f"Bỏ qua dòng {line_num}: Luật trùng lặp. Nội dung: '{raw}'")
                     continue
 
-                # Nếu luật hợp lệ và không trùng, thêm vào danh sách
                 seen_rules_canonical.add(canonical_key)
-                # Dùng premises chưa sắp xếp để giữ nguyên bản gốc (nếu muốn)
-                original_premises = tuple(p.strip() for p in left.split("&") if p.strip())
-                new_rule = Rule(premises=original_premises, conclusion=conclusion, label=label, id=len(rules))
+
+                # Giữ nguyên thứ tự tiền đề gốc
+                original_premises = tuple(premises_list)
+                new_rule = Rule(premises=original_premises, conclusion=conclusion, label=label, id=len(rules), op=op)
                 rules.append(new_rule)
 
     except FileNotFoundError:
@@ -85,6 +101,7 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
 # ---------- Core Engine: Forward Chaining Algorithms ----------
 
 # --- FORWARD CHAINING (BFS / Queue) ---
+# SỬA ĐỔI: forward_chain_bfs
 def forward_chain_bfs(rules: List[Rule], facts: Set[str], selection_mode: str):
     known = set(facts)
     prov: Dict[str, Tuple[Rule, Tuple[str, ...]]] = {}
@@ -102,10 +119,26 @@ def forward_chain_bfs(rules: List[Rule], facts: Set[str], selection_mode: str):
         visited_facts_for_expansion.add(current_fact)
 
         for r in rule_source:
-            if r.conclusion not in known and current_fact in r.premises:
-                if all(p in known for p in r.premises):
+            # Bỏ qua nếu đã biết kết luận
+            if r.conclusion in known:
+                continue
+
+            # Chỉ kích hoạt nếu fact hiện tại nằm trong tiền đề của luật
+            if current_fact in r.premises:
+
+                # BẮT ĐẦU SỬA ĐỔI: Kiểm tra tiền đề dựa trên toán tử
+                premises_met = False
+                if r.op == 'AND':
+                    premises_met = all(p in known for p in r.premises)
+                elif r.op == 'OR':
+                    # Chỉ cần 1 tiền đề (là current_fact) nằm trong 'known' là đủ
+                    premises_met = True
+                # KẾT THÚC SỬA ĐỔI
+
+                if premises_met:
                     new_fact = r.conclusion
                     known.add(new_fact)
+                    # Lưu tất cả tiền đề (dù là AND hay OR) để hiển thị log
                     prov[new_fact] = (r, r.premises)
                     steps.append(f"({len(steps) + 1}) Kích hoạt '{r.label}': {{{', '.join(r.premises)}}} → {new_fact}")
                     if new_fact not in queue:
@@ -126,7 +159,16 @@ def forward_chain_dfs(rules: List[Rule], facts: Set[str], selection_mode: str):
     def _dfs_visit(fact_to_process: str):
         for r in rule_source:
             if r.conclusion not in known and fact_to_process in r.premises:
-                if all(p in known for p in r.premises):
+
+                # BẮT ĐẦU SỬA ĐỔI: Kiểm tra tiền đề dựa trên toán tử
+                premises_met = False
+                if r.op == 'AND':
+                    premises_met = all(p in known for p in r.premises)
+                elif r.op == 'OR':
+                    premises_met = True  # fact_to_process đang được xử lý, nên OR thỏa mãn
+                # KẾT THÚC SỬA ĐỔI
+
+                if premises_met:
                     new_fact = r.conclusion
                     known.add(new_fact)
                     prov[new_fact] = (r, r.premises)
@@ -140,6 +182,7 @@ def forward_chain_dfs(rules: List[Rule], facts: Set[str], selection_mode: str):
 
 
 # ---------- Core Engine: Backward Chaining Algorithm ----------
+# VIẾT LẠI: backward_chain_all
 def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[str], selection_mode: str) -> List[
     List[Rule]]:
     if goal in facts:
@@ -154,18 +197,35 @@ def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[
     relevant_rules = [r for r in rule_source if r.conclusion == goal]
 
     for r in relevant_rules:
-        all_subpaths = []
-        valid = True
-        for p in r.premises:
-            sub = backward_chain_all(p, rules, facts, seen.copy(), selection_mode)
-            if not sub:
-                valid = False
-                break
-            all_subpaths.append(sub)
-        if valid:
-            for combo in itertools.product(*all_subpaths):
-                chain = list(itertools.chain(*combo)) + [r]
-                paths.append(chain)
+
+        if r.op == 'AND':
+            # Logic AND (giữ nguyên): Cần chứng minh *tất cả* tiền đề
+            all_subpaths = []
+            valid = True
+            for p in r.premises:
+                sub = backward_chain_all(p, rules, facts, seen.copy(), selection_mode)
+                if not sub:
+                    valid = False
+                    break
+                all_subpaths.append(sub)
+            if valid:
+                # Tổ hợp tất cả các đường con
+                for combo in itertools.product(*all_subpaths):
+                    chain = list(itertools.chain(*combo)) + [r]
+                    paths.append(chain)
+
+        elif r.op == 'OR':
+            # Logic OR (MỚI): Chỉ cần chứng minh *bất kỳ* một tiền đề nào
+            for p in r.premises:
+                # Tìm tất cả các đường chứng minh cho tiền đề 'p'
+                subpaths_for_p = backward_chain_all(p, rules, facts, seen.copy(), selection_mode)
+
+                # Với mỗi đường chứng minh thành công cho 'p',
+                # nó tạo thành một đường chứng minh hoàn chỉnh
+                for sub_path in subpaths_for_p:
+                    chain = sub_path + [r]
+                    paths.append(chain)
+
     return paths
 
 
@@ -401,26 +461,35 @@ class RuleEditor(tk.Toplevel):
     def on_ok(self):
         premises = [e.get().strip() for e in self.premise_entries if e.get().strip()]
         conclusions = [e.get().strip() for e in self.conclusion_entries if e.get().strip()]
+
         if not premises or not conclusions:
             messagebox.showerror("Lỗi", "Phần Giả thiết và Kết luận không được rỗng.", parent=self)
             return
 
-        combined_premises = []
-        for i, p in enumerate(premises):
-            combined_premises.append(p)
-            if i < len(self.premise_ops):
-                combined_premises.append(self.premise_ops[i].get())
-        premise_expr = " ".join(combined_premises)
+        # 1. Kiểm tra toán tử tiền đề
+        premise_ops = {op.get() for op in self.premise_ops}
+        if len(premise_ops) > 1:
+            messagebox.showerror("Lỗi", "Không hỗ trợ trộn lẫn '&' và 'v' trong cùng một luật.", parent=self)
+            return
 
-        combined_conclusions = []
-        for i, c in enumerate(conclusions):
-            combined_conclusions.append(c)
-            if i < len(self.conclusion_ops):
-                combined_conclusions.append(self.conclusion_ops[i].get())
-        conclusion_expr = " ".join(combined_conclusions)
+        op = 'AND'  # Mặc định
+        if premise_ops:
+            op_str = premise_ops.pop()
+            if op_str == 'v':
+                op = 'OR'
 
+        # 2. Kiểm tra toán tử kết luận (Engine này chỉ hỗ trợ 1 kết luận)
+        conclusion_ops = {op.get() for op in self.conclusion_ops}
+        if len(conclusions) > 1 or conclusion_ops:
+            messagebox.showwarning("Lưu ý",
+                                   "Engine chỉ hỗ trợ 1 kết luận duy nhất (không có toán tử).\nChỉ kết luận đầu tiên sẽ được lưu.",
+                                   parent=self)
+
+        conclusion = conclusions[0]
         label = self.label_var.get().strip() or "R?"
-        self.result = Rule(premises=(premise_expr,), conclusion=conclusion_expr, label=label, id=-1)
+
+        # 3. Tạo kết quả với 'op' và tuple tiền đề
+        self.result = Rule(premises=tuple(premises), conclusion=conclusion, label=label, id=-1, op=op)
         self.destroy()
 
 
@@ -528,11 +597,11 @@ class App(tk.Tk):
         ttk.Label(input_grid, text="Sự kiện (Facts):").grid(row=0, column=0, sticky="w", pady=2)
         self.ent_gt = ttk.Entry(input_grid, width=40)
         self.ent_gt.grid(row=0, column=1, sticky="ew", padx=5)
-        self.ent_gt.insert(0, "a,f,g")
+        self.ent_gt.insert(0, "a,b,c")
         ttk.Label(input_grid, text="Mục tiêu (Goals):").grid(row=1, column=0, sticky="w", pady=2)
         self.ent_goal = ttk.Entry(input_grid, width=40)
         self.ent_goal.grid(row=1, column=1, sticky="ew", padx=5)
-        self.ent_goal.insert(0, "e")
+        self.ent_goal.insert(0, "r")
         input_grid.columnconfigure(1, weight=1)
 
         # Output text area
@@ -550,13 +619,17 @@ class App(tk.Tk):
 
     def _update_rules_display(self):
         """Cập nhật Listbox hiển thị từ self.last_rules."""
-        self.rules_listbox.delete(0, "end")  # Xóa toàn bộ nội dung cũ
+        self.rules_listbox.delete(0, "end")
         for i, r in enumerate(self.last_rules):
-            # Cập nhật lại ID của luật để khớp với vị trí mới
-            self.last_rules[i] = Rule(premises=r.premises, conclusion=r.conclusion, label=r.label, id=i)
-            rule_str = f"({i + 1}) {' & '.join(r.premises)} -> {r.conclusion} | {r.label}"
+            # Cập nhật lại ID
+            self.last_rules[i] = Rule(premises=r.premises, conclusion=r.conclusion, label=r.label, id=i, op=r.op)
+
+            # SỬA: Dùng đúng toán tử
+            op_str = ' & ' if r.op == 'AND' else ' v '
+            rule_str = f"({i + 1}) {op_str.join(r.premises)} -> {r.conclusion} | {r.label}"
             self.rules_listbox.insert("end", rule_str)
 
+    # SỬA ĐỔI: App._save_rules_to_file
     def _save_rules_to_file(self):
         """Lưu danh sách self.last_rules hiện tại vào file."""
         if not self.rules_filepath:
@@ -566,27 +639,30 @@ class App(tk.Tk):
         try:
             with open(self.rules_filepath, 'w', encoding='utf-8') as f:
                 for r in self.last_rules:
-                    # Ghi lại theo định dạng chuẩn
-                    premises_str = ' & '.join(r.premises)
+                    # SỬA: Dùng đúng toán tử
+                    op_str = ' & ' if r.op == 'AND' else ' v '
+                    premises_str = op_str.join(r.premises)
                     f.write(f"{premises_str} -> {r.conclusion} | {r.label}\n")
             return True
         except Exception as e:
             messagebox.showerror("Lỗi Lưu File", f"Không thể lưu file: {e}")
             return False
 
+    # SỬA ĐỔI: App.add_rule_action (để kiểm tra trùng lặp)
     def add_rule_action(self):
         """Mở cửa sổ để thêm một luật mới."""
-        if not self.rules_filepath:
-            messagebox.showerror("Lỗi", "Vui lòng tải một file luật trước khi thêm.")
-            return
+        # ... (code mở editor y như cũ) ...
 
-        # Tạo cửa sổ con (Toplevel)
         editor = RuleEditor(self, title="Thêm Luật Mới")
-        if editor.result:  # Nếu người dùng nhấn Lưu
+        if editor.result:
             new_rule = editor.result
-            # Kiểm tra trùng lặp trước khi thêm
-            canonical_key = (tuple(sorted(new_rule.premises)), new_rule.conclusion)
-            is_duplicate = any(canonical_key == (tuple(sorted(r.premises)), r.conclusion) for r in self.last_rules)
+
+            # SỬA: Kiểm tra trùng lặp phải bao gồm cả 'op'
+            canonical_key = (tuple(sorted(new_rule.premises)), new_rule.conclusion, new_rule.op)
+            is_duplicate = any(
+                (tuple(sorted(r.premises)), r.conclusion, r.op) == canonical_key
+                for r in self.last_rules
+            )
 
             if is_duplicate:
                 messagebox.showwarning("Trùng lặp", "Luật này đã tồn tại.")
