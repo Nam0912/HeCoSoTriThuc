@@ -14,3 +14,21 @@ slide rule v differential analyzer -> analog computer | Rule_PhanLoai_OR_analog_
 supercomputer -> mainframe | Rule_IsA_mainframe_0
 web site v number cruncher -> computer | Rule_PhanLoai_OR_computer_8
 workstation v file server v personal computer v von neumann machine -> digital computer | Rule_PhanLoai_OR_digital_computer_4
+bath chair v motorized wheelchair -> wheelchair | Rule_PhanLoai_OR_wheelchair_0
+camp chair v yacht chair v deck chair -> folding chair | Rule_PhanLoai_OR_folding_chair_0
+captain's chair v morris chair v fauteuil v recliner -> armchair | Rule_PhanLoai_OR_armchair_0
+easy chair -> armchair | Rule_IsA_armchair_4
+folding chair v wheelchair v rocking chair v barber chair -> chair | Rule_PhanLoai_OR_chair_8
+ladder-back v armchair v chaise longue v fighting chair -> chair | Rule_PhanLoai_OR_chair_4
+lawn chair v eames chair v highchair -> chair | Rule_PhanLoai_OR_chair_12
+leg & back -> chair | Rule_CauTao_chair
+musnud v cathedra v peacock-throne v mercy seat -> throne | Rule_PhanLoai_OR_throne_0
+rung & rocker -> rocking chair | Rule_CauTao_rocking_chair
+rung & splat -> straight chair | Rule_CauTao_straight_chair
+shoofly v platform rocker v boston rocker -> rocking chair | Rule_PhanLoai_OR_rocking_chair_0
+tablet-armed chair v straight chair v swivel chair v chair of state -> chair | Rule_PhanLoai_OR_chair_0
+throne -> chair of state | Rule_IsA_chair_of_state_0
+windsor chair -> straight chair | Rule_IsA_straight_chair_0
+wing chair -> easy chair | Rule_IsA_easy_chair_0
+penalty box v prie-dieu v banquette v park bench -> bench | Rule_PhanLoai_OR_bench_4
+pew v settle v flat bench v window seat -> bench | Rule_PhanLoai_OR_bench_0
