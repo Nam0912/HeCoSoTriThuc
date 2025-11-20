@@ -3,23 +3,8 @@ from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
 import requests
 from io import BytesIO
-from ToanHoc import forward_chain_bfs
+from ToanHoc import forward_chain_bfs, Rule
 
-
-# ======================
-# RULE STRUCTURE
-# ======================
-class Rule:
-    def __init__(self, label, premises, conclusion, op):
-        self.label = label
-        self.premises = premises
-        self.conclusion = conclusion
-        self.op = op
-
-
-# ======================
-# LOAD RULES FROM FILE
-# ======================
 def load_rules(filename="wordnet.txt"):
     rules = []
     possible_objects = set()
@@ -54,19 +39,34 @@ def load_rules(filename="wordnet.txt"):
                 prem = [left.strip().lower()]
                 op = "AND"
 
-            rules.append(Rule(label, tuple(prem), conclusion, op))
-
+            rules.append(
+                Rule(
+                    premises=tuple(prem),
+                    conclusion=conclusion,
+                    label=label,
+                    id=len(rules),
+                    op=op
+                )
+            )
     return rules, possible_objects
 
-
-# ======================
-# GUI
-# ======================
 class UserGUI:
     def __init__(self, master):
         self.master = master
-        self.master.title("🧠 Expert System – Forward Chaining")
+        self.master.title("Inference System")
         self.master.geometry("1000x650")
+
+        root.update_idletasks()
+        w = 1000
+        h = 650
+        screen_w = root.winfo_screenwidth()
+        screen_h = root.winfo_screenheight()
+
+        x = (screen_w // 2) - (w // 2)
+        y = (screen_h // 2) - (h // 2)
+
+        root.geometry(f"{w}x{h}+{x}+{y}")
+
         style = ttk.Style()
         style.configure(
             "TButton",
@@ -76,7 +76,6 @@ class UserGUI:
 
         self.rules, self.possible_objects = load_rules("wordnet.txt")
 
-        # MAIN FRAME: 2 COLUMNS FIXED 50/50
         main_frame = ttk.Frame(master, padding=10)
         main_frame.pack(fill="both", expand=True)
 
@@ -84,9 +83,6 @@ class UserGUI:
         main_frame.grid_columnconfigure(0, weight=1, minsize=total_width // 2)
         main_frame.grid_columnconfigure(1, weight=1, minsize=total_width // 2)
 
-        # ================================================
-        # LEFT COLUMN
-        # ================================================
         left_frame = ttk.LabelFrame(main_frame, text="Input Facts", padding=15)
         left_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         left_frame.grid_columnconfigure(0, weight=1)
@@ -99,9 +95,9 @@ class UserGUI:
         self.entry = ttk.Entry(left_frame, width=40, font=("Segoe UI", 11))
         self.entry.pack(fill="x", pady=10)
 
-        button_width = 28  # mọi nút đều dùng chung kích thước
+        button_width = 28
 
-        btn_run = ttk.Button(left_frame, text="🔥 Run Forward Chaining",
+        btn_run = ttk.Button(left_frame, text="🔥 Run",
                              command=self.on_infer, width=button_width)
         btn_run.pack(pady=6)
 
@@ -113,7 +109,6 @@ class UserGUI:
                                command=self.clear_all, width=button_width)
         btn_clear.pack(pady=12)
 
-        # Steps (hidden by default)
         self.steps_frame = ttk.Frame(left_frame)
         self.steps_visible = False
 
@@ -121,9 +116,6 @@ class UserGUI:
                                   font=("Consolas", 9), background="#f0f0f0")
         self.steps_text.pack(fill="both", expand=True)
 
-        # ================================================
-        # RIGHT COLUMN
-        # ================================================
         right_frame = ttk.LabelFrame(main_frame, text="Inference Results", padding=15)
         right_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
         right_frame.grid_columnconfigure(0, weight=1)
@@ -132,24 +124,16 @@ class UserGUI:
         ttk.Label(right_frame, text="Inferred Objects:",
                   font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
 
-        # CHIP TAG AREA (THAY CHO TEXT)
         self.tags_frame = tk.Frame(right_frame, bg="#ffffff")
         self.tags_frame.grid(row=1, column=0, sticky="nw", pady=5)
 
-        # IMAGE
         self.img_label = ttk.Label(right_frame)
         self.img_label.grid(row=2, column=0, pady=10)
 
-    # ======================
-    # CLEAR TAGS
-    # ======================
     def clear_tags(self):
         for widget in self.tags_frame.winfo_children():
             widget.destroy()
 
-    # ======================
-    # RUN FORWARD CHAINING
-    # ======================
     def on_infer(self):
         user_input = self.entry.get().strip()
         self.clear_tags()
@@ -165,7 +149,6 @@ class UserGUI:
 
         inferred = sorted(list(known.intersection(self.possible_objects)))
 
-        # ---- CHIP TAG RENDER ----
         if inferred:
             for obj in inferred:
                 tag = tk.Label(
@@ -188,15 +171,11 @@ class UserGUI:
                            font=("Segoe UI", 10, "bold"), borderwidth=1, relief="solid")
             tag.pack(side="left", padx=5, pady=5)
 
-        # ---- reasoning steps ----
         if steps:
             self.steps_text.insert("end", "\n".join(steps))
         else:
             self.steps_text.insert("end", "No rules fired.")
 
-    # ======================
-    # IMAGE DISPLAY
-    # ======================
     def show_image(self, keyword):
         try:
             url = f"https://pixabay.com/api/?key=53101775-37777e069e2eb137c3c11588e&q={keyword}&image_type=photo"
@@ -213,9 +192,6 @@ class UserGUI:
         except:
             self.img_label.config(text="(Image load error)")
 
-    # ======================
-    # SHOW / HIDE STEPS
-    # ======================
     def toggle_steps(self):
         if self.steps_visible:
             self.steps_frame.pack_forget()
@@ -224,9 +200,6 @@ class UserGUI:
 
         self.steps_visible = not self.steps_visible
 
-    # ======================
-    # CLEAR ALL
-    # ======================
     def clear_all(self):
         self.entry.delete(0, "end")
         self.clear_tags()
