@@ -3,244 +3,237 @@ from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
 import requests
 from io import BytesIO
-from googletrans import Translator
-from collections import deque
-from typing import List, Set, Tuple, Dict, Deque
-
-# Khởi tạo Translator (cần cho việc dịch)
-translator = Translator()
+from ToanHoc import forward_chain_bfs
 
 
 # ======================
-# ĐỊNH NGHĨA CẤU TRÚC RULE
+# RULE STRUCTURE
 # ======================
 class Rule:
-    """Cấu trúc đại diện cho một luật suy diễn: IF (Premises) THEN (Conclusion)"""
-
-    def __init__(self, label: str, premises: Tuple[str, ...], conclusion: str):
+    def __init__(self, label, premises, conclusion, op):
         self.label = label
         self.premises = premises
         self.conclusion = conclusion
-
-    def __repr__(self):
-        return f"'{self.label}': {', '.join(self.premises)} -> {self.conclusion}"
+        self.op = op
 
 
 # ======================
-# MOTOR SUY DIỄN TIẾN BFS
-# (Hàm được cung cấp bởi người dùng, đã thêm type hints và import cần thiết)
+# LOAD RULES FROM FILE
 # ======================
-def forward_chain_bfs(rules: List[Rule], facts: Set[str], selection_mode: str = 'Min'):
-    """
-    Thực hiện suy diễn tiến bằng Breadth-First Search (BFS).
+def load_rules(filename="wordnet.txt"):
+    rules = []
+    possible_objects = set()
 
-    Args:
-        rules: Danh sách các Rule (Luật).
-        facts: Tập hợp các Fact (Sự kiện) ban đầu được biết.
-        selection_mode: Chế độ ưu tiên luật ('Min' - luật đầu tiên, 'Max' - luật cuối cùng).
+    with open(filename, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "->" not in line:
+                continue
 
-    Returns:
-        known: Tập hợp các fact được biết (bao gồm cả fact ban đầu và fact mới được suy diễn).
-        prov: Chứng minh (cây suy diễn) cho mỗi fact mới.
-        steps: Các bước kích hoạt luật (quy trình suy diễn).
-    """
-    known = set(facts)
-    prov: Dict[str, Tuple[Rule, Tuple[str, ...]]] = {}
-    steps: List[str] = []
+            left, right = line.split("->", 1)
+            left = left.strip()
+            right = right.strip()
 
-    # Queue chứa các fact mới được suy diễn hoặc fact ban đầu chưa được dùng để mở rộng
-    queue: Deque[str] = deque(list(facts))
-    visited_facts_for_expansion = set()
+            if "|" in right:
+                conclusion, label = right.split("|", 1)
+                conclusion = conclusion.strip().lower()
+                label = label.strip()
+            else:
+                conclusion = right.strip().lower()
+                label = f"RULE_{len(rules)}"
 
-    # Chọn thứ tự luật dựa trên selection_mode
-    rule_source = rules if selection_mode == 'Min' else list(reversed(rules))
+            possible_objects.add(conclusion)
 
-    while queue:
-        current_fact = queue.popleft()
-        if current_fact in visited_facts_for_expansion:
-            continue
-        visited_facts_for_expansion.add(current_fact)
+            if "&" in left:
+                prem = [p.strip().lower() for p in left.split("&")]
+                op = "AND"
+            elif "v" in left:
+                prem = [p.strip().lower() for p in left.split("v")]
+                op = "OR"
+            else:
+                prem = [left.strip().lower()]
+                op = "AND"
 
-        for r in rule_source:
-            # Kiểm tra xem fact hiện tại có phải là một premise của luật r không
-            if r.conclusion not in known and current_fact in r.premises:
-                # Kiểm tra xem TẤT CẢ các premise của luật r đã được biết chưa (logic AND)
-                if all(p in known for p in r.premises):
-                    new_fact = r.conclusion
-                    known.add(new_fact)
-                    prov[new_fact] = (r, r.premises)
-                    # Ghi lại bước suy diễn
-                    steps.append(f"({len(steps) + 1}) Kích hoạt '{r.label}': {{{', '.join(r.premises)}}} → {new_fact}")
+            rules.append(Rule(label, tuple(prem), conclusion, op))
 
-                    if new_fact not in queue:
-                        queue.append(new_fact)
-
-    return known, prov, steps
-
-
-# ======================
-# CHUYỂN DỮ LIỆU THÀNH RULES
-# ======================
-def load_rules(filename="knowledge_base.txt"):
-    """Đọc knowledge_base.txt và chuyển đổi thành danh sách các Rule đơn giản."""
-    rules: List[Rule] = []
-    possible_objects: Set[str] = set()
-    try:
-        with open(filename, "r", encoding="utf-8") as f:
-            for line in f:
-                if ":" not in line:
-                    continue
-                # Ví dụ: a book: a chapter, a ledger, a novel
-                obj_raw, feats_raw = line.strip().split(":", 1)
-                obj = obj_raw.strip().lower()
-                feats = [x.strip().lower() for x in feats_raw.split(",") if x.strip()]
-                possible_objects.add(obj)
-
-                for i, feat in enumerate(feats):
-                    label = f"IF_{feat.replace(' ', '_').upper()}_THEN_{obj.replace(' ', '_').upper()}"
-                    # Tạo Rule đơn giản: IF {feature} THEN {object}
-                    rules.append(Rule(
-                        label=label,
-                        premises=(feat,),  # Premises là một tuple chỉ chứa 1 feature
-                        conclusion=obj
-                    ))
-    except FileNotFoundError:
-        messagebox.showerror("Lỗi", "Không tìm thấy file knowledge_base.txt!")
     return rules, possible_objects
 
 
 # ======================
-# GIAO DIỆN NGƯỜI DÙNG
+# GUI
 # ======================
 class UserGUI:
     def __init__(self, master):
         self.master = master
-        self.master.title("🧠 Hệ Chuyên Gia Suy Diễn Tiến (BFS)")
-        self.master.geometry("850x650")
+        self.master.title("🧠 Expert System – Forward Chaining")
+        self.master.geometry("1000x650")
+        style = ttk.Style()
+        style.configure(
+            "TButton",
+            font=("Segoe UI", 10, "bold"),
+            padding=6
+        )
 
-        # Tải rules và danh sách tất cả các đối tượng có thể có
-        self.rules, self.possible_objects = load_rules()
+        self.rules, self.possible_objects = load_rules("wordnet.txt")
 
-        # --- UI Setup ---
-        ttk.Label(master, text="Nhập các đặc trưng (Facts) cách nhau dấu phẩy:",
-                  font=("Segoe UI", 12, "bold")).pack(pady=10)
+        # MAIN FRAME: 2 COLUMNS FIXED 50/50
+        main_frame = ttk.Frame(master, padding=10)
+        main_frame.pack(fill="both", expand=True)
 
-        self.entry = ttk.Entry(master, width=80)
-        self.entry.pack(pady=5, padx=20)
+        total_width = 1000
+        main_frame.grid_columnconfigure(0, weight=1, minsize=total_width // 2)
+        main_frame.grid_columnconfigure(1, weight=1, minsize=total_width // 2)
 
-        ttk.Button(master, text="🔥 Bắt đầu Suy Diễn Tiến", command=self.on_infer).pack(pady=10)
+        # ================================================
+        # LEFT COLUMN
+        # ================================================
+        left_frame = ttk.LabelFrame(main_frame, text="Input Facts", padding=15)
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        left_frame.grid_columnconfigure(0, weight=1)
 
-        # Khung chứa kết quả chính và bước suy diễn
-        self.results_frame = ttk.Frame(master)
-        self.results_frame.pack(fill='both', expand=True, padx=20, pady=10)
+        left_frame.grid_rowconfigure(10, weight=1)
 
-        # Kết quả chính (Inferred Objects)
-        ttk.Label(self.results_frame, text="✅ Vật Phù Hợp (Inferred Objects):",
-                  font=("Segoe UI", 11, "bold")).pack(anchor='w', pady=(0, 5))
-        self.result_text = tk.Text(self.results_frame, height=5, wrap="word", font=("Segoe UI", 10))
-        self.result_text.pack(fill='x', padx=5, pady=5)
+        ttk.Label(left_frame, text="Enter features separated by commas:",
+                  font=("Segoe UI", 11, "bold")).pack(anchor="w")
 
-        # Bước suy diễn (Steps)
-        ttk.Label(self.results_frame, text="📚 Quá Trình Suy Diễn (Reasoning Steps):",
-                  font=("Segoe UI", 11, "bold")).pack(anchor='w', pady=(10, 5))
-        self.steps_text = tk.Text(self.results_frame, height=10, wrap="word", font=("Consolas", 9),
-                                  background="#f0f0f0")
-        self.steps_text.pack(fill='both', expand=True, padx=5, pady=5)
+        self.entry = ttk.Entry(left_frame, width=40, font=("Segoe UI", 11))
+        self.entry.pack(fill="x", pady=10)
 
-        # Label hiển thị ảnh
-        self.img_label = ttk.Label(master)
-        self.img_label.pack(pady=10)
+        button_width = 28  # mọi nút đều dùng chung kích thước
+
+        btn_run = ttk.Button(left_frame, text="🔥 Run Forward Chaining",
+                             command=self.on_infer, width=button_width)
+        btn_run.pack(pady=6)
+
+        btn_show = ttk.Button(left_frame, text="📜 Show Steps",
+                              command=self.toggle_steps, width=button_width)
+        btn_show.pack(pady=6)
+
+        btn_clear = ttk.Button(left_frame, text="🧹 Clear All",
+                               command=self.clear_all, width=button_width)
+        btn_clear.pack(pady=12)
+
+        # Steps (hidden by default)
+        self.steps_frame = ttk.Frame(left_frame)
+        self.steps_visible = False
+
+        self.steps_text = tk.Text(self.steps_frame, height=15, wrap="word",
+                                  font=("Consolas", 9), background="#f0f0f0")
+        self.steps_text.pack(fill="both", expand=True)
+
+        # ================================================
+        # RIGHT COLUMN
+        # ================================================
+        right_frame = ttk.LabelFrame(main_frame, text="Inference Results", padding=15)
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        right_frame.grid_columnconfigure(0, weight=1)
+        right_frame.rowconfigure(1, weight=1)
+
+        ttk.Label(right_frame, text="Inferred Objects:",
+                  font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
+
+        # CHIP TAG AREA (THAY CHO TEXT)
+        self.tags_frame = tk.Frame(right_frame, bg="#ffffff")
+        self.tags_frame.grid(row=1, column=0, sticky="nw", pady=5)
+
+        # IMAGE
+        self.img_label = ttk.Label(right_frame)
+        self.img_label.grid(row=2, column=0, pady=10)
 
     # ======================
-    # KÍCH HOẠT SUY DIỄN TIẾN
+    # CLEAR TAGS
+    # ======================
+    def clear_tags(self):
+        for widget in self.tags_frame.winfo_children():
+            widget.destroy()
+
+    # ======================
+    # RUN FORWARD CHAINING
     # ======================
     def on_infer(self):
         user_input = self.entry.get().strip()
-        self.result_text.delete('1.0', tk.END)
-        self.steps_text.delete('1.0', tk.END)
+        self.clear_tags()
+        self.steps_text.delete("1.0", "end")
         self.img_label.config(image="", text="")
 
         if not user_input:
-            messagebox.showwarning("Lỗi", "Bạn phải nhập ít nhất 1 đặc trưng (Fact) để bắt đầu suy diễn!")
+            messagebox.showwarning("Error", "Please enter at least one fact.")
             return
 
-        # 1. Dịch sang tiếng Anh để chuẩn hóa với knowledge base
-        try:
-            # Chỉ dịch khi input không phải chỉ chứa các ký tự Latin
-            if any(ord(c) > 127 for c in user_input):
-                translated = translator.translate(user_input, src="vi", dest="en").text
-            else:
-                translated = user_input
-        except Exception as e:
-            print(f"Lỗi dịch thuật: {e}")
-            translated = user_input  # Sử dụng nguyên bản nếu dịch lỗi
+        initial_facts = {x.strip().lower() for x in user_input.split(",") if x.strip()}
+        known, _, steps = forward_chain_bfs(self.rules, initial_facts, "Min")
 
-        # 2. Chuẩn bị các Fact ban đầu (Premises)
-        initial_facts = set(x.strip().lower() for x in translated.split(",") if x.strip())
+        inferred = sorted(list(known.intersection(self.possible_objects)))
 
-        if not initial_facts:
-            messagebox.showwarning("Lỗi", "Input không chứa Fact hợp lệ.")
-            return
+        # ---- CHIP TAG RENDER ----
+        if inferred:
+            for obj in inferred:
+                tag = tk.Label(
+                    self.tags_frame,
+                    text=obj,
+                    bg="#d1e7ff",
+                    fg="#084298",
+                    padx=12,
+                    pady=6,
+                    font=("Segoe UI", 10, "bold"),
+                    borderwidth=1,
+                    relief="solid"
+                )
+                tag.pack(side="left", padx=5, pady=5)
 
-        # 3. Chạy Motor Suy Diễn Tiến BFS
-        known, _, steps = forward_chain_bfs(self.rules, initial_facts)
-
-        # 4. Lọc ra các Object được suy diễn (Kết quả chính)
-        inferred_objects = sorted(list(known.intersection(self.possible_objects)))
-
-        # 5. Hiển thị Kết Quả
-        if inferred_objects:
-            # Hiển thị tất cả các objects được suy diễn
-            result_str = "Các vật đã được suy diễn thành công:\n"
-            for obj in inferred_objects:
-                # Dịch ngược lại sang tiếng Việt để hiển thị thân thiện
-                try:
-                    vi_name = translator.translate(obj, src="en", dest="vi").text
-                except:
-                    vi_name = obj
-                result_str += f"- {vi_name.capitalize()} ({obj})\n"
-
-            self.result_text.insert(tk.END, result_str)
-
-            # Chỉ hiển thị ảnh của vật đầu tiên được suy diễn (hoặc vật đầu tiên trong danh sách)
-            self.show_image(inferred_objects[0])
+            self.show_image(inferred[0])
         else:
-            self.result_text.insert(tk.END, "❌ Không có vật nào được suy diễn từ các Facts đã nhập.")
+            tag = tk.Label(self.tags_frame, text="❌ No objects inferred",
+                           bg="#ffd6d6", fg="#7a0000", padx=12, pady=6,
+                           font=("Segoe UI", 10, "bold"), borderwidth=1, relief="solid")
+            tag.pack(side="left", padx=5, pady=5)
 
-        # 6. Hiển thị Quá Trình Suy Diễn
+        # ---- reasoning steps ----
         if steps:
-            self.steps_text.insert(tk.END, "\n".join(steps))
+            self.steps_text.insert("end", "\n".join(steps))
         else:
-            self.steps_text.insert(tk.END,
-                                   "Không có luật nào được kích hoạt. Các Facts đã nhập không dẫn đến kết luận mới.")
+            self.steps_text.insert("end", "No rules fired.")
 
+    # ======================
+    # IMAGE DISPLAY
+    # ======================
     def show_image(self, keyword):
-        """Tải và hiển thị ảnh minh họa cho keyword"""
         try:
-            # Sử dụng key mẫu của bạn
-            api_key = "53101775-37777e069e2eb137c3c11588e"
-            url = f"https://pixabay.com/api/?key={api_key}&q={keyword}&image_type=photo&per_page=3"
-
-            response = requests.get(url, headers=headers, timeout=6)
-            response.raise_for_status()  # Raise exception cho lỗi HTTP
-            data = response.json()
+            url = f"https://pixabay.com/api/?key=53101775-37777e069e2eb137c3c11588e&q={keyword}&image_type=photo"
+            data = requests.get(url, timeout=6).json()
 
             if data.get("hits"):
                 img_url = data["hits"][0]["webformatURL"]
-                img_data = requests.get(img_url, headers=headers, timeout=6).content
-                img = Image.open(BytesIO(img_data)).resize((260, 260), Image.Resampling.LANCZOS)
+                img_data = requests.get(img_url, timeout=6).content
+                img = Image.open(BytesIO(img_data)).resize((260, 260))
                 self.photo = ImageTk.PhotoImage(img)
-                self.img_label.config(image=self.photo, text="")
+                self.img_label.config(image=self.photo)
             else:
-                self.img_label.config(image="", text="(Không tìm thấy ảnh minh họa)")
-        except requests.exceptions.RequestException as e:
-            # Xử lý lỗi kết nối, timeout, hoặc HTTP
-            print(f"⚠️ Lỗi tải ảnh (Kết nối/HTTP): {e}")
-            self.img_label.config(image="", text="(Lỗi kết nối hoặc không tìm thấy ảnh)")
-        except Exception as e:
-            # Xử lý lỗi PIL hoặc lỗi chung khác
-            print(f"⚠️ Lỗi tải ảnh: {e}")
-            self.img_label.config(image="", text="(Lỗi xử lý ảnh)")
+                self.img_label.config(text="(No image found)")
+        except:
+            self.img_label.config(text="(Image load error)")
+
+    # ======================
+    # SHOW / HIDE STEPS
+    # ======================
+    def toggle_steps(self):
+        if self.steps_visible:
+            self.steps_frame.pack_forget()
+        else:
+            self.steps_frame.pack(fill="both", expand=True, pady=10)
+
+        self.steps_visible = not self.steps_visible
+
+    # ======================
+    # CLEAR ALL
+    # ======================
+    def clear_all(self):
+        self.entry.delete(0, "end")
+        self.clear_tags()
+        self.steps_text.delete("1.0", "end")
+        self.img_label.config(image="", text="")
+        self.steps_frame.pack_forget()
+        self.steps_visible = False
 
 
 if __name__ == "__main__":
