@@ -1,19 +1,22 @@
-a book: a chapter, a ledger, a novel, a text, entertainment, learning, paper, the bible
-a car: a bumper, a horn, a tire, an engine, fun, honda
-a device: a phone, a television
-a machine: phone
-a motor vehicle: a car
-a pen: writing letters
-a phone: calling, communication, make a call
-a table: a leg, eat at, eating off of
-animation: anime
-anime: anime movie, entertainment
-car: a bmw, a volvo, an oldsmobile, volkswagen, wheels
-cartoon: animee
-library: a book
-natural resin: anime
-pen: creep, felt-tip pen, fold, fountain pen, holding paddock, plastic, sty
-phone: consonant, orinasal phone, phoneme, sonant
-smartphone: n97, palm smart phone
-swan: pen
-vehicle: a car
+# Knowledge Base (Normalized & Deduped)
+# Format: Premises -> Conclusion | Label
+
+ambulance v convertible v horseless carriage v roadster v sport utility -> car | Rule_OR_car_20
+automatic transmission & axle & ball joint & coach -> car | Rule_AND_car
+beach wagon v gas guzzler v pace car v subcompact v touring car -> car | Rule_OR_car_25
+berlin -> limousine | Rule_IsA_limousine_0
+brass & glass & iron & leather -> cab | Rule_AND_cab
+brougham -> sedan | Rule_IsA_sedan_0
+bus v limousine v minivan v racer v used-car -> car | Rule_OR_car_15
+cab v hardtop v model t v sports car v stock car -> car | Rule_OR_car_10
+compact v cruiser v hatchback v hot rod v sedan -> car | Rule_OR_car_5
+coupe -> car | Rule_IsA_car_30
+electric v jeep v loaner v minicar v stanley steamer -> car | Rule_OR_car_0
+finisher -> racer | Rule_IsA_racer_0
+funny wagon -> ambulance | Rule_IsA_ambulance_0
+minibus v school bus v trolleybus -> bus | Rule_OR_bus_0
+minicab -> minicar | Rule_IsA_minicar_0
+panda car -> cruiser | Rule_IsA_cruiser_0
+pawnbroker v usurer -> loaner | Rule_OR_loaner_0
+roof & window -> bus | Rule_AND_bus
+silver & silver-plated bronze -> ambulance | Rule_AND_ambulance
