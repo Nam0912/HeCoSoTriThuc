@@ -5,7 +5,7 @@ import requests
 from io import BytesIO
 from ToanHoc import forward_chain_bfs, Rule
 
-def load_rules(filename="wordnet.txt"):
+def load_rules(filename="knowledge_base.txt"):
     rules = []
     possible_objects = set()
 
@@ -74,7 +74,7 @@ class UserGUI:
             padding=6
         )
 
-        self.rules, self.possible_objects = load_rules("wordnet.txt")
+        self.rules, self.possible_objects = load_rules("knowledge_base.txt")
 
         main_frame = ttk.Frame(master, padding=10)
         main_frame.pack(fill="both", expand=True)
