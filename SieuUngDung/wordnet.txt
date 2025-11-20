@@ -32,3 +32,7 @@ windsor chair -> straight chair | Rule_IsA_straight_chair_0
 wing chair -> easy chair | Rule_IsA_easy_chair_0
 penalty box v prie-dieu v banquette v park bench -> bench | Rule_PhanLoai_OR_bench_4
 pew v settle v flat bench v window seat -> bench | Rule_PhanLoai_OR_bench_0
+comic strip -> cartoon | Rule_IsA_cartoon_0
+butch -> lesbian | Rule_IsA_lesbian_0
+closet queen v fagot -> gay man | Rule_PhanLoai_OR_gay_man_0
+gay man v lesbian -> homosexual | Rule_PhanLoai_OR_homosexual_0
