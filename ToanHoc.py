@@ -18,8 +18,8 @@ class Rule:
     premises: Tuple[str, ...]
     conclusion: str
     label: str
-    id: int  # Thêm ID để theo dõi chỉ số
-    op: str  # MỚI: 'AND' hoặc 'OR'
+    id: int
+    op: str
 
 def load_and_parse_rules(filepath: str) -> List[Rule]:
     """
@@ -43,7 +43,7 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
                 left, right = raw.split("->", 1)
                 left = left.replace("^", "&").strip()
 
-                op = 'AND'  # Mặc định
+                op = 'AND'
                 premises_list = []
 
                 has_and = "&" in left
@@ -55,7 +55,7 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
                 elif has_or:
                     op = 'OR'
                     premises_list = [p.strip() for p in left.split("v") if p.strip()]
-                else:  # Mặc định là AND (dù có & hay không)
+                else:
                     op = 'AND'
                     premises_list = [p.strip() for p in left.split("&") if p.strip()]
 
@@ -63,7 +63,6 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
                     print(f"Bỏ qua dòng {line_num}: Luật không có tiền đề. Nội dung: '{raw}'")
                     continue
 
-                # Sắp xếp tiền đề để kiểm tra trùng lặp
                 premises_sorted = tuple(sorted(premises_list))
 
                 if "|" in right:
@@ -74,8 +73,6 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
                 conclusion = concl.strip()
                 label = label.strip()
 
-                # 2. KIỂM TRA TRÙNG LẶP
-                # Thêm 'op' vào key để phân biệt A&B->C và A v B->C
                 canonical_key = (premises_sorted, conclusion, op)
                 if canonical_key in seen_rules_canonical:
                     print(f"Bỏ qua dòng {line_num}: Luật trùng lặp. Nội dung: '{raw}'")
@@ -83,7 +80,6 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
 
                 seen_rules_canonical.add(canonical_key)
 
-                # Giữ nguyên thứ tự tiền đề gốc
                 original_premises = tuple(premises_list)
                 new_rule = Rule(premises=original_premises, conclusion=conclusion, label=label, id=len(rules), op=op)
                 rules.append(new_rule)
@@ -101,7 +97,6 @@ def load_and_parse_rules(filepath: str) -> List[Rule]:
 # ---------- Core Engine: Forward Chaining Algorithms ----------
 
 # --- FORWARD CHAINING (BFS / Queue) ---
-# SỬA ĐỔI: forward_chain_bfs
 def forward_chain_bfs(rules: List[Rule], facts: Set[str], selection_mode: str):
     known = set(facts)
     prov: Dict[str, Tuple[Rule, Tuple[str, ...]]] = {}
@@ -119,26 +114,19 @@ def forward_chain_bfs(rules: List[Rule], facts: Set[str], selection_mode: str):
         visited_facts_for_expansion.add(current_fact)
 
         for r in rule_source:
-            # Bỏ qua nếu đã biết kết luận
             if r.conclusion in known:
                 continue
 
-            # Chỉ kích hoạt nếu fact hiện tại nằm trong tiền đề của luật
             if current_fact in r.premises:
-
-                # BẮT ĐẦU SỬA ĐỔI: Kiểm tra tiền đề dựa trên toán tử
                 premises_met = False
                 if r.op == 'AND':
                     premises_met = all(p in known for p in r.premises)
                 elif r.op == 'OR':
-                    # Chỉ cần 1 tiền đề (là current_fact) nằm trong 'known' là đủ
                     premises_met = True
-                # KẾT THÚC SỬA ĐỔI
 
                 if premises_met:
                     new_fact = r.conclusion
                     known.add(new_fact)
-                    # Lưu tất cả tiền đề (dù là AND hay OR) để hiển thị log
                     prov[new_fact] = (r, r.premises)
                     steps.append(f"({len(steps) + 1}) Kích hoạt '{r.label}': {{{', '.join(r.premises)}}} → {new_fact}")
                     if new_fact not in queue:
@@ -159,14 +147,11 @@ def forward_chain_dfs(rules: List[Rule], facts: Set[str], selection_mode: str):
     def _dfs_visit(fact_to_process: str):
         for r in rule_source:
             if r.conclusion not in known and fact_to_process in r.premises:
-
-                # BẮT ĐẦU SỬA ĐỔI: Kiểm tra tiền đề dựa trên toán tử
                 premises_met = False
                 if r.op == 'AND':
                     premises_met = all(p in known for p in r.premises)
                 elif r.op == 'OR':
-                    premises_met = True  # fact_to_process đang được xử lý, nên OR thỏa mãn
-                # KẾT THÚC SỬA ĐỔI
+                    premises_met = True
 
                 if premises_met:
                     new_fact = r.conclusion
@@ -182,7 +167,6 @@ def forward_chain_dfs(rules: List[Rule], facts: Set[str], selection_mode: str):
 
 
 # ---------- Core Engine: Backward Chaining Algorithm ----------
-# VIẾT LẠI: backward_chain_all
 def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[str], selection_mode: str) -> List[
     List[Rule]]:
     if goal in facts:
@@ -199,7 +183,6 @@ def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[
     for r in relevant_rules:
 
         if r.op == 'AND':
-            # Logic AND (giữ nguyên): Cần chứng minh *tất cả* tiền đề
             all_subpaths = []
             valid = True
             for p in r.premises:
@@ -209,19 +192,14 @@ def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[
                     break
                 all_subpaths.append(sub)
             if valid:
-                # Tổ hợp tất cả các đường con
                 for combo in itertools.product(*all_subpaths):
                     chain = list(itertools.chain(*combo)) + [r]
                     paths.append(chain)
 
         elif r.op == 'OR':
-            # Logic OR (MỚI): Chỉ cần chứng minh *bất kỳ* một tiền đề nào
             for p in r.premises:
-                # Tìm tất cả các đường chứng minh cho tiền đề 'p'
                 subpaths_for_p = backward_chain_all(p, rules, facts, seen.copy(), selection_mode)
 
-                # Với mỗi đường chứng minh thành công cho 'p',
-                # nó tạo thành một đường chứng minh hoàn chỉnh
                 for sub_path in subpaths_for_p:
                     chain = sub_path + [r]
                     paths.append(chain)
@@ -231,35 +209,247 @@ def backward_chain_all(goal: str, rules: List[Rule], facts: Set[str], seen: Set[
 
 # ---------- Graph Drawing ----------
 # --- FPG (Flow Process Graph) ---
-def draw_fpg(prov: Dict[str, Tuple[Rule, Tuple[str, ...]]], facts: Set[str]):
-    if not prov and not facts:
-        messagebox.showwarning("Lỗi", "Không có dữ liệu để vẽ đồ thị.")
+def draw_process_graph(prov: Dict[str, Tuple[Rule, Tuple[str, ...]]], facts: Set[str], all_rules: List[Rule]):
+    """Vẽ Process Graph: Vết Suy diễn (FPG) nếu có prov, hoặc toàn bộ luật nếu không."""
+    if not all_rules:
+        messagebox.showwarning("Lỗi", "Không có luật nào để vẽ đồ thị.")
         return
 
     G = nx.DiGraph()
-    all_nodes = set(facts)
-    for concl, (_, premises) in prov.items():
-        all_nodes.add(concl)
-        for p in premises:
-            all_nodes.add(p)
 
-    for node in all_nodes:
-        color = "#9ecae1" if node in prov else "#f7f7f7"  # Kết luận màu xanh, GT màu xám
-        G.add_node(node, color=color)
+    # Scaling factor để điều chỉnh độ thu gọn (Giá trị < 1.0 sẽ thu gọn)
+    SCALE_FACTOR = 0.7
 
-    for concl, (r, used) in prov.items():
-        for p in used:
-            G.add_edge(p, concl, label=r.label)
+    # --- 1. Thêm TẤT CẢ các nodes và edges từ TẤT CẢ các luật ---
 
-    plt.figure(figsize=(10, 8))
-    colors = [G.nodes[n].get("color", "#ffffff") for n in G.nodes]
-    pos = nx.spring_layout(G, seed=42, k=0.9)
-    nx.draw_networkx_nodes(G, pos, node_color=colors, node_size=2000, edgecolors="black")
-    nx.draw_networkx_labels(G, pos, font_size=10, font_weight="bold")
-    nx.draw_networkx_edges(G, pos, arrows=True, arrowstyle="-|>", arrowsize=20, connectionstyle="arc3,rad=0.1")
-    edge_labels = nx.get_edge_attributes(G, "label")
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=9, label_pos=0.5)
-    plt.title("Flow Process Graph (FPG)", fontsize=16)
+    # 1a. Thu thập tất cả các nodes liên quan (từ premises và conclusions của TẤT CẢ rules)
+    all_facts_in_rules = set(facts)
+    for r in all_rules:
+        all_facts_in_rules.update(r.premises)
+        all_facts_in_rules.add(r.conclusion)
+
+    # 1b. Thêm TẤT CẢ các edges đại diện cho TẤT CẢ các luật
+    all_edge_labels = {}
+    for r in all_rules:
+        for p in r.premises:
+            # Thêm edge cho mỗi tiền đề đến kết luận, sử dụng nhãn luật
+            edge_key = (p, r.conclusion)
+
+            # Xử lý trường hợp có nhiều luật dùng chung premises và conclusion.
+            # Giữ nhãn luật đầu tiên hoặc kết hợp chúng. Ở đây tôi sẽ thay thế để đơn giản.
+            # Đối với Rule, mỗi luật có một nhãn duy nhất.
+            all_edge_labels[edge_key] = r.label
+            G.add_edge(p, r.conclusion)
+
+    # Thêm TẤT CẢ các nodes vào đồ thị
+    for node in all_facts_in_rules:
+        G.add_node(node)
+
+        # --- 2. Phân loại và gán thuộc tính cho nodes và edges để HIGHTLIGHT VẾT SUY DIỄN (nếu có prov) ---
+
+    # Mặc định, tất cả các nodes đều 'unused' (hoặc 'all_facts')
+    for node in G.nodes():
+        G.nodes[node]['node_type'] = "all_facts"
+        G.nodes[node]['color'] = "#F0F0F0"  # Màu mặc định
+        G.nodes[node]['in_fpg'] = False  # Không nằm trong vết suy diễn
+
+    initial_facts = facts
+    derived_facts = set(prov.keys())  # Các fact được suy diễn
+
+    if prov:
+        # Nếu có prov (vết suy diễn), ta phân loại lại nodes
+        for node in all_facts_in_rules:
+            is_initial = node in initial_facts
+            is_derived = node in derived_facts
+            is_used_as_premise = any(node in used for r, used in prov.values())
+
+            if is_initial:
+                G.nodes[node]['node_type'] = "initial"
+                G.nodes[node]['color'] = "#90EE90"  # Xanh lá
+                G.nodes[node]['in_fpg'] = True
+            elif is_derived:
+                G.nodes[node]['node_type'] = "derived"
+                G.nodes[node]['color'] = "#87CEEB"  # Xanh dương
+                G.nodes[node]['in_fpg'] = True
+            elif is_used_as_premise:  # Các fact ban đầu không được suy diễn nhưng được dùng làm premises
+                G.nodes[node]['node_type'] = "initial"
+                G.nodes[node]['color'] = "#90EE90"  # Xanh lá
+                G.nodes[node]['in_fpg'] = True
+            else:  # Các fact không tham gia vào suy diễn
+                G.nodes[node]['node_type'] = "unused"
+                G.nodes[node]['color'] = "#F0F0F0"
+
+        # Đánh dấu các edges thuộc vết suy diễn
+        fpg_edge_labels = {}
+        for concl, (r, used) in prov.items():
+            for p in used:
+                edge_key = (p, concl)
+                # Đảm bảo chỉ highlight các edges CÓ TRONG VẾT SUY DIỄN
+                if edge_key in all_edge_labels and all_edge_labels[edge_key] == r.label:
+                    fpg_edge_labels[edge_key] = r.label  # Nhãn này dùng để highlight
+
+        # Sử dụng fpg_edge_labels để vẽ nhãn cho vết suy diễn
+        edge_labels_to_draw = fpg_edge_labels
+
+    else:
+        # Nếu KHÔNG có prov, ta vẽ tất cả các nhãn luật
+        for node in initial_facts:
+            # Vẫn đánh dấu fact ban đầu nếu có, dù không có suy diễn
+            G.nodes[node]['node_type'] = "initial"
+            G.nodes[node]['color'] = "#90EE90"
+
+        # Sử dụng all_edge_labels để vẽ nhãn cho toàn bộ đồ thị
+        edge_labels_to_draw = all_edge_labels
+
+    # --- 3. Tính toán Layout cải tiến (Chỉ tính cho các nodes tham gia nếu có prov) ---
+
+    pos = {}
+    try:
+        # Layout chỉ tính trên các nodes tham gia Vết suy diễn (nếu có prov)
+        # Hoặc tất cả nếu không có prov (vẽ toàn bộ Rule Process)
+        if prov:
+            # Logic tính levels (giữ nguyên để phân tầng FPG)
+            levels = {}
+            for node in G.nodes():
+                if G.nodes[node]['in_fpg']:
+                    if node in initial_facts:
+                        levels[node] = 0
+                    elif node in derived_facts:
+                        # Logic get_depth (được sửa lỗi cú pháp)
+                        def get_depth(n, depth=0):
+                            if n in initial_facts:
+                                return depth
+                            if n not in prov:
+                                return depth
+                            max_d = depth
+                            for premise in prov[n][1]:
+                                max_d = max(max_d, get_depth(premise, depth + 1))
+                            return max_d
+
+                        levels[node] = get_depth(node)
+                    else:
+                        levels[node] = -1  # Nodes không tham gia FPG
+                else:
+                    levels[node] = -2  # Nodes không tham gia (kể cả không phải initial)
+
+            # Phân nhóm nodes
+            level_groups = {}
+            unused_nodes_for_layout = []
+            for node, level in levels.items():
+                if level < 0:
+                    unused_nodes_for_layout.append(node)
+                else:
+                    if level not in level_groups:
+                        level_groups[level] = []
+                    level_groups[level].append(node)
+
+            # Tạo vị trí thủ công cho nodes tham gia FPG
+            y_spacing = 5.0 * SCALE_FACTOR
+            max_level = max(level_groups.keys()) if level_groups else 0
+
+            for level, nodes in sorted(level_groups.items()):
+                num_nodes = len(nodes)
+                x_spacing = 6.0 * SCALE_FACTOR
+                total_width = (num_nodes - 1) * x_spacing
+                x_start = -total_width / 2
+                y_pos = (max_level - level) * y_spacing
+
+                for i, node in enumerate(nodes):
+                    pos[node] = (x_start + i * x_spacing, y_pos)
+
+            # Đặt các nodes KHÔNG THAM GIA FPG ở vị trí riêng biệt (unused_nodes_for_layout)
+            if unused_nodes_for_layout:
+                num_unused = len(unused_nodes_for_layout)
+
+                if pos:
+                    x_coords = [x for x, y in pos.values()]
+                    min_y = min([y for x, y in pos.values()]) if pos else 0
+
+                    unused_y = min_y - 3.0 * SCALE_FACTOR
+                    unused_x_spacing = 4.0 * SCALE_FACTOR
+                    total_unused_width = (num_unused - 1) * unused_x_spacing
+                    unused_x_start = -total_unused_width / 2
+
+                    for i, node in enumerate(unused_nodes_for_layout):
+                        pos[node] = (unused_x_start + i * unused_x_spacing, unused_y)
+                else:
+                    for i, node in enumerate(unused_nodes_for_layout):
+                        pos[node] = (i * 4.0 * SCALE_FACTOR, -5.0 * SCALE_FACTOR)
+
+        else:
+            # Nếu KHÔNG có prov, dùng spring layout cho TẤT CẢ nodes
+            pos = nx.spring_layout(G, k=6.0 * SCALE_FACTOR, iterations=200, seed=42)
+
+    except Exception as e:
+        print(f"Layout error: {e}")
+        # Fallback layout
+        pos = nx.spring_layout(G, k=6.0, iterations=200, seed=42)
+
+    # --- 4. Vẽ đồ thị ---
+
+    plt.figure(figsize=(20 * SCALE_FACTOR, 14 * SCALE_FACTOR))
+
+    # Vẽ nodes theo loại (initial, derived, unused / all_facts)
+    # Nếu có prov, chỉ vẽ các loại FPG. Nếu không có prov, tất cả là 'all_facts' hoặc 'initial'
+    node_types_to_draw = [
+        ("initial", "#90EE90"),
+        ("derived", "#87CEEB"),
+        ("unused", "#F0F0F0"),
+        ("all_facts", "#F0F0F0")
+    ]
+
+    for node_type, color in node_types_to_draw:
+        nodes_of_type = [n for n, d in G.nodes(data=True) if d.get('node_type') == node_type]
+        if nodes_of_type:
+            nx.draw_networkx_nodes(G, pos, nodelist=nodes_of_type,
+                                   node_color=color, node_size=3500,
+                                   edgecolors="black", linewidths=2.5)
+
+    # Vẽ labels
+    nx.draw_networkx_labels(G, pos, font_size=13, font_weight="bold", font_family="sans-serif")
+
+    # Vẽ edges: Highlight vết suy diễn nếu có prov, hoặc tất cả nếu không
+    if prov:
+        # Vẽ các edges KHÔNG nằm trong FPG (mờ hơn)
+        fpg_edges = set(fpg_edge_labels.keys())
+        non_fpg_edges = [e for e in G.edges() if e not in fpg_edges]
+        nx.draw_networkx_edges(G, pos, edgelist=non_fpg_edges, arrows=True, arrowstyle="-|>",
+                               arrowsize=25, width=1.0, edge_color="#AAAAAA",
+                               connectionstyle="arc3,rad=0.15", alpha=0.4,
+                               min_source_margin=20, min_target_margin=20)
+
+        # Vẽ các edges NẰM trong FPG (đậm, đỏ)
+        nx.draw_networkx_edges(G, pos, edgelist=fpg_edges, arrows=True, arrowstyle="-|>",
+                               arrowsize=30, width=3.0, edge_color="red",
+                               connectionstyle="arc3,rad=0.15", alpha=0.8,
+                               min_source_margin=20, min_target_margin=20)
+
+    else:
+        # Vẽ TẤT CẢ edges nếu không có prov
+        nx.draw_networkx_edges(G, pos, arrows=True, arrowstyle="-|>",
+                               arrowsize=30, width=2.5, edge_color="#555555",
+                               connectionstyle="arc3,rad=0.15", alpha=0.65,
+                               min_source_margin=20, min_target_margin=20)
+
+    # Vẽ edge labels
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_to_draw,
+                                 font_size=11, font_color="red", font_weight="bold",
+                                 bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow",
+                                           alpha=0.8, edgecolor="orange", linewidth=1.5))
+
+    # Chú thích
+    legend_elements = [
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#90EE90',
+                   markersize=15, markeredgecolor='black', markeredgewidth=2, label='Giả thiết ban đầu'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#87CEEB',
+                   markersize=15, markeredgecolor='black', markeredgewidth=2, label='Kết luận suy diễn'),
+        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#F0F0F0',
+                   markersize=15, markeredgecolor='black', markeredgewidth=2, label='Không sử dụng / Các Fact khác')
+    ]
+    plt.legend(handles=legend_elements, loc='upper right', fontsize=11)
+
+    title = "Flow Process Graph (FPG) - Vết suy diễn" if prov else " Toàn bộ luật"
+    plt.title(title, fontsize=18, fontweight='bold', pad=20)
     plt.axis("off")
     plt.tight_layout()
     plt.show()
@@ -804,7 +994,7 @@ class App(tk.Tk):
         self.txt_out.insert("1.0", "\n".join(lines))
 
     def on_draw_fpg(self):
-        draw_fpg(self.last_prov, self.last_facts)
+        draw_process_graph(self.last_prov, self.last_facts, self.last_rules)
 
     def on_draw_rpg(self):
         if not self.last_rules:
